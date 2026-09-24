@@ -1,6 +1,6 @@
 # 🐝 Smart Hive — AI-IoT Honey Traceability & Provenance Platform
 
-![Smart Hive Platform](public/assets/zzz.jpeg)
+
 
 **Smart Hive** is a React-powered AI-IoT Honey Traceability and Quality Assurance Platform built to empower rural beekeepers, national quality testing laboratories, retail distributors, and end consumers. By combining IoT microclimate telemetry, acoustic spectrogram data, comb photo evidence, NABL laboratory certifications, and cryptographic batch verification, Smart Hive delivers tamper-proof **Hive-to-Home Provenance**.
 

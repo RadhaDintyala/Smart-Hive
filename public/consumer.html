@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consumer Honey Purity Verification — Smart Hive</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👥</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<!-- ═══════════════ HEADER WITH HAMBURGER ═══════════════ -->
+<header class="app-header">
+    <div style="display:flex;align-items:center;gap:14px;">
+        <button class="hamburger-btn" id="btn-hamburger">☰ Menu</button>
+        <a href="/" class="brand-title" style="text-decoration:none;">
+            <span>Smart Hive</span>
+            <span class="brand-badge">CONSUMER PORTAL</span>
+        </a>
+    </div>
+    <div class="header-right">
+        <a href="/login" class="btn-white" style="padding:8px 16px;font-size:0.85rem;text-decoration:none;">🔑 Sign In / Select Role</a>
+    </div>
+</header>
+
+<!-- ═══════════════ SIDEBAR DRAWER ═══════════════ -->
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<aside class="sidebar-drawer" id="sidebar-drawer">
+    <div class="sidebar-header">
+        <h3>🐝 Smart Hive Portal</h3>
+        <button class="sidebar-close-btn" id="btn-sidebar-close">✕</button>
+    </div>
+    <nav class="sidebar-nav">
+        <!-- Rendered dynamically by app.js based on selected role -->
+    </nav>
+</aside>
+
+<main class="app-container">
+    <!-- BATCH SELECTOR CARDS GRID -->
+    <div class="neo-card" style="margin-bottom:24px;">
+        <h2 class="neo-card-title">👥 Public Honey Batch Traceability Selector</h2>
+        <p class="neo-card-subtitle" style="margin-bottom:14px;">Click any honey batch card below to view its QR code, microclimate IoT telemetry, and laboratory certification:</p>
+
+        <div id="consumer-batch-cards-container" class="batch-cards-grid">
+            <p style="color:var(--text-muted);font-size:0.85rem;">Loading registered batches...</p>
+        </div>
+
+        <div style="display:flex;gap:12px;margin-top:10px;align-items:center;" class="form-row">
+            <input type="text" id="consumer-search-input" class="neo-input" placeholder="Or enter custom Batch ID e.g. BATCH-2026-HIM-101">
+            <button class="btn-yellow" id="btn-consumer-search">🔍 Lookup Batch</button>
+        </div>
+    </div>
+
+    <!-- VERIFICATION RESULT CONTAINER -->
+    <div id="consumer-verify-result" style="display:none;">
+        <!-- Purity Banner -->
+        <div class="purity-hero-banner">
+            <div class="purity-big-score">
+                <div class="score-num" id="c-purity-score">99.4%</div>
+                <div class="score-lbl">Purity Score</div>
+            </div>
+            <div>
+                <h2 id="c-batch-title" style="font-size:1.8rem;font-weight:900;">BATCH-2026-HIM-101</h2>
+                <div class="badge-status PASS" id="c-status-badge" style="display:inline-block;margin:6px 0;">✓ Verified Pure Honey</div>
+                <p id="c-crop-name" style="font-weight:600;">Wild Himalayan Mustard & Acacia Honey</p>
+                <div style="font-size:0.8rem;color:#333;margin-top:4px;">
+                    Ledger Hash: <code id="c-sha-hash" style="background:#fff;padding:2px 6px;border:1px solid #000;border-radius:3px;">--</code>
+                </div>
+            </div>
+        </div>
+
+        <!-- ASSOCIATED QR CODE CARD -->
+        <div class="neo-card" style="text-align:center;margin-bottom:30px;">
+            <h3 class="neo-card-title">📱 Associated Batch QR Code & Provenance Certificate</h3>
+            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px;">This QR Code links directly to this tamper-proof cryptographic audit trail.</p>
+            <img id="c-qr-img" src="" alt="Batch QR Code" style="width:180px;height:180px;border:2px solid #000;border-radius:6px;box-shadow:3px 3px 0px #000;">
+            <div style="margin-top:10px;font-family:var(--font-mono);font-size:0.8rem;color:#444;">
+                Verify URL: <a id="c-qr-link" href="#" target="_blank" style="color:#d97706;font-weight:700;">--</a>
+            </div>
+        </div>
+
+        <div class="grid-2col">
+            <!-- BEEKEEPER & IOT TELEMETRY -->
+            <div class="neo-card">
+                <h3 class="neo-card-title">👨‍🌾 Beekeeper Profile & Hive IoT Sensors</h3>
+                <div style="margin-bottom:14px;background:#fdfbf7;border:2px solid #000;padding:12px;border-radius:6px;">
+                    <strong id="c-bk-name" style="font-size:1.1rem;display:block;">Rajesh Kumar</strong>
+                    <span id="c-bk-apiary" style="color:#555;font-weight:600;">Himalayan Organic Apiary, Dehradun</span>
+                    <div id="c-bk-license" style="font-size:0.8rem;color:#666;margin-top:2px;">License: GOV-HONEY-AP-8821</div>
+                </div>
+
+                <div style="margin-bottom:16px;">
+                    <span style="font-size:0.85rem;font-weight:800;color:var(--text-primary);">Hive Microclimate Telemetry:</span>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
+                        <div style="background:#ffffff;border:2px solid #000;box-shadow:2px 2px 0px #000;padding:8px;border-radius:4px;font-size:0.85rem;">Temp: <strong id="c-iot-temp">34.8°C</strong></div>
+                        <div style="background:#ffffff;border:2px solid #000;box-shadow:2px 2px 0px #000;padding:8px;border-radius:4px;font-size:0.85rem;">Humid: <strong id="c-iot-humid">58.5%</strong></div>
+                        <div style="background:#ffffff;border:2px solid #000;box-shadow:2px 2px 0px #000;padding:8px;border-radius:4px;font-size:0.85rem;">Net Weight: <strong id="c-iot-weight">48.2 kg</strong></div>
+                        <div style="background:#ffffff;border:2px solid #000;box-shadow:2px 2px 0px #000;padding:8px;border-radius:4px;font-size:0.85rem;">VOC Gas: <strong id="c-iot-voc">110 ppm</strong></div>
+                    </div>
+                </div>
+
+                <div id="c-evidence-box" style="margin-top:16px;"></div>
+            </div>
+
+            <!-- LAB TEST CERTIFICATE -->
+            <div class="neo-card">
+                <h3 class="neo-card-title">🧪 Official Laboratory Certificate</h3>
+                
+                <!-- LAB DETAILS OR PENDING BANNER -->
+                <div id="c-lab-details-container">
+                    <div style="line-height:1.8;font-size:0.9rem;">
+                        <div>Testing Lab: <strong id="c-lab-name">Central National Honey Quality Control Lab</strong></div>
+                        <div>Moisture Content: <strong id="c-lab-moisture">16.8% (Legal Max 20%)</strong></div>
+                        <div>HMF Freshness: <strong id="c-lab-hmf">12.4 mg/kg</strong></div>
+                        <div>Antibiotics: <strong id="c-lab-antibiotics">Not Detected (0.0 ppm)</strong></div>
+                        <div>Pollen Signature: <strong id="c-lab-pollen">Alpine Acacia Pollen Grains</strong></div>
+                        <div style="background:#fffdfa;border:2px solid #000;padding:12px;border-radius:6px;margin-top:14px;" id="c-lab-feedback">
+                            <em>"Exceptional purity. Meets FSSAI and USDA Organic standards."</em>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Retailer Verification Status -->
+                <div style="margin-top:20px;padding:12px;background:#f0fdf4;border:2px solid #000;border-radius:6px;" id="c-retailer-box">
+                    <strong style="font-size:0.9rem;color:#166534;">🏪 Store Stock Audit Status:</strong>
+                    <div id="c-retailer-info" style="font-size:0.85rem;color:#14532d;margin-top:4px;">Verified in stock at Pure Natural Foods (Connaught Place, Delhi).</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEPARATE FEEDBACK & CONTACT ACTION BUTTONS -->
+        <div class="neo-card" style="margin-top:30px;background:#fffdf0;">
+            <h3 class="neo-card-title">💬 Consumer Experience & Support Actions</h3>
+            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">Leave product feedback or submit an official inquiry on dedicated pages:</p>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                <a id="btn-goto-feedback" href="/feedback" class="btn-yellow" style="text-decoration:none;">💬 Leave Feedback & Rating Score</a>
+                <a id="btn-goto-contact" href="/contact" class="btn-white" style="text-decoration:none;color:#ef4444;border-color:#ef4444;">⚠️ Report Quality Concern / Contact Support</a>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

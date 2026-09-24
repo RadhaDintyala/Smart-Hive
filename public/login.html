@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Portal Workspace Role — Smart Hive</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<!-- ═══════════════ HEADER WITH HAMBURGER ═══════════════ -->
+<header class="app-header">
+    <div style="display:flex;align-items:center;gap:14px;">
+        <button class="hamburger-btn" id="btn-hamburger">☰ Menu</button>
+        <a href="/" class="brand-title" style="text-decoration:none;">
+            <span>Smart Hive</span>
+            <span class="brand-badge">GOV PORTAL</span>
+        </a>
+    </div>
+    <div class="header-right">
+        <a href="/" class="btn-white" style="padding:8px 16px;font-size:0.85rem;text-decoration:none;">← Home Page</a>
+    </div>
+</header>
+
+<!-- ═══════════════ SIDEBAR DRAWER ═══════════════ -->
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<aside class="sidebar-drawer" id="sidebar-drawer">
+    <div class="sidebar-header">
+        <h3>🐝 Smart Hive Portal</h3>
+        <button class="sidebar-close-btn" id="btn-sidebar-close">✕</button>
+    </div>
+    <nav class="sidebar-nav">
+        <!-- Rendered dynamically by app.js based on selected role -->
+    </nav>
+</aside>
+
+<!-- ═══════════════ ROLE SELECTION & LOGIN ═══════════════ -->
+<div class="login-card-container">
+    <div class="neo-card">
+        <h2 class="neo-card-title">Select Portal Workspace Role</h2>
+        <p class="neo-card-subtitle">Choose a role from the national traceability blueprint to access its workspace:</p>
+
+        <div class="role-buttons-grid">
+            <div class="role-box-btn active" data-user="beekeeper1" data-role="Beekeeper">
+                <div class="icon">🐝</div>
+                <strong>Beekeeper</strong>
+                <small>IoT Sensors, Audio, Images & Harvest Logs</small>
+            </div>
+            <div class="role-box-btn" data-user="lab1" data-role="Laboratory">
+                <div class="icon">🧪</div>
+                <strong>Laboratory</strong>
+                <small>Purity Testing & Quality Feedback</small>
+            </div>
+            <div class="role-box-btn" data-user="retailer1" data-role="Retailer">
+                <div class="icon">🏪</div>
+                <strong>Retailer</strong>
+                <small>Batch Record Verification & Inventory</small>
+            </div>
+            <div class="role-box-btn" data-user="consumer1" data-role="End Consumer">
+                <div class="icon">👥</div>
+                <strong>End Consumer</strong>
+                <small>Purity Check, Beekeeper Profile & Rating</small>
+            </div>
+        </div>
+
+        <form id="login-form">
+            <div class="form-group">
+                <label>Selected Role Account Username</label>
+                <input type="text" id="login-username" class="neo-input" value="beekeeper1" required readonly style="background:#f0f0f0;">
+            </div>
+            <div class="form-group">
+                <label>Workspace Access Password</label>
+                <input type="password" id="login-password" class="neo-input" value="pass123" required placeholder="Enter password (default: pass123)">
+            </div>
+            <div id="login-error-msg" style="color:var(--red-accent);font-weight:700;font-size:0.85rem;margin-bottom:12px;display:none;"></div>
+            <button type="submit" class="btn-yellow full-width" style="width:100%;font-size:1.05rem;">🔑 Sign In to Selected Workspace</button>
+        </form>
+
+        <div style="margin-top:20px;padding:12px;background:#f9f8f3;border:1px solid #000;border-radius:4px;font-size:0.8rem;color:#555;">
+            <strong>📌 Demo Credentials Note:</strong> Default password for all roles is <code>pass123</code>. Click any card to select role and log in.
+        </div>
+    </div>
+</div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

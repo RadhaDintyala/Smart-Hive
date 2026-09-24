@@ -1,0 +1,34 @@
+{
+  "name": "smart-hive-ai-iot",
+  "version": "1.0.0",
+  "description": "Government Honey Traceability & Smart Hive Quality Assurance Platform — Role-based platform for Beekeepers, Laboratories, Retailers, and End Consumers.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "vite",
+    "build": "vite build",
+    "server": "node server.js"
+  },
+  "keywords": [
+    "beekeeping",
+    "honey-traceability",
+    "qr-code",
+    "lab-testing",
+    "smart-hive"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^18.0.3",
+    "express": "^4.18.2",
+    "lucide-react": "^1.48.0",
+    "mongoose": "^9.10.2",
+    "qrcode": "^1.5.3",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.3.1"
+  }
+}

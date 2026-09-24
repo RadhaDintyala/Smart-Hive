@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Hive — Mermaid Diagrams Exporter</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+        }
+
+        .header {
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #f59e0b;
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #94a3b8;
+        }
+
+        .diagram-card {
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 30px;
+            width: 100%;
+            max-width: 1100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .diagram-header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 12px;
+        }
+
+        .diagram-header h2 {
+            font-size: 1.25rem;
+            color: #fbbf24;
+        }
+
+        .btn-download {
+            background: #f59e0b;
+            color: #0f172a;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-download:hover {
+            background: #d97706;
+            color: #fff;
+        }
+
+        .mermaid-container {
+            width: 100%;
+            overflow-x: auto;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            background: #0b1120;
+            border-radius: 12px;
+        }
+
+        .mermaid {
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>🐝 Smart Hive — Mermaid Diagram Exporter</h1>
+        <p>Rendered directly from <code>smart_hive_user_flow.md</code></p>
+    </div>
+
+    <!-- User Flow Diagram -->
+    <div class="diagram-card">
+        <div class="diagram-header">
+            <h2>1. User Navigation Flow Diagram</h2>
+            <button class="btn-download" onclick="downloadPNG('diagram-user-flow', 'user_flow_mermaid_diagram.png')">📥 Download PNG</button>
+        </div>
+        <div class="mermaid-container" id="diagram-user-flow">
+            <pre class="mermaid">
+flowchart TD
+    A["🏠 Landing Page"] --> B{"User Action"}
+    B --> C["📊 Dashboard Overview"]
+    B --> D["🐝 Add New Hive"]
+    B --> E["⚙️ System Settings"]
+    
+    C --> F["Select a Hive"]
+    F --> G["📈 Live Telemetry Panel"]
+    F --> H["🔊 Audio Health Analysis"]
+    F --> I["⚖️ Weight & Yield Forecast"]
+    F --> J["🛡️ Authenticity Chain"]
+    
+    G --> K["Temperature / Humidity / VOC Gauges"]
+    G --> L["Real-time Trend Charts"]
+    G --> M{"Anomaly Detected?"}
+    M -->|Yes| N["🚨 Alert Notification"]
+    M -->|No| O["✅ Normal Status"]
+    
+    H --> P["Frequency Spectrum Visualization"]
+    H --> Q["CNN Classification Result"]
+    Q --> R{"Anomaly?"}
+    R -->|Yes| S["⚠️ Queenless / Mite Alert"]
+    R -->|No| T["✅ Normal Vibrational State"]
+    
+    I --> U["Historical Weight Chart"]
+    I --> V["30-Day LSTM Yield Prediction"]
+    I --> W["Seasonal Baseline Overlay"]
+    
+    J --> X["SHA-256 Signed Records"]
+    J --> Y["Tamper-Proof Audit Log"]
+    J --> Z["Export Certification PDF"]
+    
+    D --> AA["Enter Hive ID & Location"]
+    AA --> AB["Configure Sensor Mode"]
+    AB --> AC{"Mock or Live IoT?"}
+    AC -->|Mock| AD["Start Simulation Engine"]
+    AC -->|Live| AE["Configure MQTT Broker"]
+    AE --> AF["Pair ESP32 Hardware"]
+    
+    E --> AG["Notification Preferences"]
+    E --> AH["Alert Thresholds"]
+    E --> AI["Data Export Settings"]
+    E --> AJ["MQTT Broker Configuration"]
+            </pre>
+        </div>
+    </div>
+
+    <!-- Technical Sequence Diagram -->
+    <div class="diagram-card">
+        <div class="diagram-header">
+            <h2>2. Technical Operations Sequence Diagram</h2>
+            <button class="btn-download" onclick="downloadPNG('diagram-tech-seq', 'technical_operations_sequence.png')">📥 Download PNG</button>
+        </div>
+        <div class="mermaid-container" id="diagram-tech-seq">
+            <pre class="mermaid">
+sequenceDiagram
+    participant Sensor as 📡 Data Input Layer
+    participant Gateway as 🔧 Ingestion Gateway
+    participant EdgeAI as 🧠 Edge AI Engine
+    participant Cloud as ☁️ Cloud Layer
+    participant Auth as 🔒 Authenticity Chain
+    participant API as 🌐 API Gateway
+    participant UI as 🖥️ Dashboard
+
+    Note over Sensor: Mock Simulator OR Physical IoT Array
+    
+    Sensor->>Gateway: Raw telemetry packet (temp, humidity, VOC, weight, audio)
+    
+    Note over Gateway: Audio Pipeline: MFCC windowing at 44.1kHz<br/>Telemetry: MinMax / StandardScaler normalization
+    
+    Gateway->>EdgeAI: Normalized feature vectors
+    
+    Note over EdgeAI: Audio CNN (TFLite/ONNX): Mel-spectrogram → classification<br/>Anomaly Detection: Statistical deviation / Autoencoder
+    
+    EdgeAI->>Cloud: Classification results + normalized metrics
+    
+    Note over Cloud: Productivity Engine: LSTM / XGBoost yield forecast<br/>30-day honey production prediction
+    
+    Cloud->>Auth: Telemetry + analytics payload
+    
+    Note over Auth: SHA-256 cryptographic signature<br/>Immutable hash chain for food fraud prevention
+    
+    Auth->>API: Signed, tamper-proof record
+    
+    API->>UI: JSON payload via WebSocket / REST
+    
+    Note over UI: Real-time gauges, charts, alerts<br/>Authenticity verification panel
+            </pre>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#1e293b',
+                primaryTextColor: '#f8fafc',
+                primaryBorderColor: '#f59e0b',
+                lineColor: '#38bdf8',
+                secondaryColor: '#334155',
+                tertiaryColor: '#0f172a'
+            }
+        });
+
+        function downloadPNG(containerId, filename) {
+            const container = document.getElementById(containerId);
+            const svg = container.querySelector('svg');
+            if (!svg) return alert('Diagram not rendered yet');
+
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+
+            img.onload = function () {
+                canvas.width = svg.getBoundingClientRect().width * 2;
+                canvas.height = svg.getBoundingClientRect().height * 2;
+                ctx.fillStyle = '#0b1120';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.scale(2, 2);
+                ctx.drawImage(img, 0, 0);
+
+                const pngUrl = canvas.toDataURL('image/png');
+                const downloadLink = document.createElement('a');
+                downloadLink.href = pngUrl;
+                downloadLink.download = filename;
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+                URL.revokeObjectURL(url);
+            };
+
+            img.src = url;
+        }
+    </script>
+</body>
+</html>

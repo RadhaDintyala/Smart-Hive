@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Us & Support — Smart Hive</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📞</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<!-- ═══════════════ HEADER WITH HAMBURGER ═══════════════ -->
+<header class="app-header">
+    <div style="display:flex;align-items:center;gap:14px;">
+        <button class="hamburger-btn" id="btn-hamburger">☰ Menu</button>
+        <a href="/" class="brand-title" style="text-decoration:none;">
+            <span>Smart Hive</span>
+            <span class="brand-badge">SUPPORT PORTAL</span>
+        </a>
+    </div>
+    <div class="header-right">
+        <a href="/login" class="btn-white" style="padding:8px 16px;font-size:0.85rem;text-decoration:none;">🔑 Sign In / Role Select</a>
+    </div>
+</header>
+
+<!-- ═══════════════ SIDEBAR DRAWER ═══════════════ -->
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<aside class="sidebar-drawer" id="sidebar-drawer">
+    <div class="sidebar-header">
+        <h3>🐝 Smart Hive Portal</h3>
+        <button class="sidebar-close-btn" id="btn-sidebar-close">✕</button>
+    </div>
+    <nav class="sidebar-nav">
+        <!-- Rendered dynamically by app.js based on selected role -->
+    </nav>
+</aside>
+
+<main class="app-container">
+    <div style="margin-bottom:24px;">
+        <h1 style="font-size:1.8rem;font-weight:900;">📞 Contact Us & National Support Helpline</h1>
+        <p style="color:var(--text-muted);font-size:0.95rem;">Reach out to the National Honey Quality Control Board, submit official quality concerns, or request technical support.</p>
+    </div>
+
+    <div class="grid-2col">
+        <!-- CONTACT INFO CARDS -->
+        <div>
+            <div class="neo-card">
+                <h3 class="neo-card-title">🏛️ Government Quality Control Directorate</h3>
+                <div style="line-height:1.8;font-size:0.9rem;margin-top:10px;">
+                    <div><strong>National Honey Development Board</strong></div>
+                    <div>Krishi Bhawan, Dr. Rajendra Prasad Road</div>
+                    <div>New Delhi - 110001, India</div>
+                    <div style="margin-top:10px;"><strong>Helpline:</strong> 1800-11-HONEY (46639) [Toll Free]</div>
+                    <div><strong>Email:</strong> support.smarthive@gov.in</div>
+                    <div><strong>Working Hours:</strong> Mon - Fri, 09:00 AM - 05:30 PM IST</div>
+                </div>
+            </div>
+
+            <div class="neo-card">
+                <h3 class="neo-card-title">🔬 Central Laboratory Accreditation Office</h3>
+                <div style="line-height:1.8;font-size:0.9rem;margin-top:10px;">
+                    <div>NABL & ISO/IEC 17025 Certified Testing Hub</div>
+                    <div>Directorate of Honey Quality Assurance</div>
+                    <div>Dehradun Road, Regional Testing Center</div>
+                    <div><strong>Lab Desk:</strong> lab.quality@smarthive.gov.in</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- REPORT QUALITY CONCERN FORM -->
+        <div class="neo-card">
+            <h3 class="neo-card-title">⚠️ Submit Official Quality Concern / Inquiry</h3>
+            <p class="neo-card-subtitle">Report suspected adulteration, broken seals, or request apiary verification:</p>
+
+            <form id="form-contact-concern">
+                <div class="form-group">
+                    <label>Select Batch ID (Optional)</label>
+                    <select id="cc-batch-select" class="neo-input">
+                        <option value="BATCH-2026-HIM-101">BATCH-2026-HIM-101 (Wild Himalayan Mustard & Acacia Honey)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Your Full Name *</label>
+                    <input type="text" id="cc-consumer-name" class="neo-input" value="Ananya Sen" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Inquiry / Concern Category *</label>
+                    <select id="cc-category-select" class="neo-input">
+                        <option value="Adulteration Suspicion">Adulteration / Sugar Syrup Suspicion</option>
+                        <option value="Packaging Tampering">Packaging / Seal Tampered</option>
+                        <option value="Mislabeled Origin">Mislabeled Origin or Floral Source</option>
+                        <option value="Beekeeper Licensing Inquiry">Beekeeper Licensing & Apiary Inquiry</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Detailed Description & Comments *</label>
+                    <textarea id="cc-comments-text" class="neo-input" rows="4" placeholder="Provide clear details regarding the store location, batch code, or issue..." required></textarea>
+                </div>
+
+                <button type="submit" class="btn-white full-width" style="width:100%;color:#ef4444;border-color:#ef4444;font-size:1.05rem;">Submit Official Audit Concern</button>
+            </form>
+        </div>
+    </div>
+</main>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

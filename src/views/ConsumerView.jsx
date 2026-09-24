@@ -15,8 +15,12 @@ export default function ConsumerView({ selectedBatchId, setCurrentView }) {
 
   useEffect(() => {
     fetchAvailableBatches();
-    verifyBatch(batchIdInput);
-  }, []);
+    const params = new URLSearchParams(window.location.search);
+    const urlBatchId = params.get('batchId');
+    const activeId = urlBatchId || selectedBatchId || 'BATCH-2026-HIM-101';
+    setBatchIdInput(activeId);
+    verifyBatch(activeId);
+  }, [selectedBatchId]);
 
   const fetchAvailableBatches = async () => {
     try {

@@ -617,6 +617,12 @@ function BeekeeperView({ authToken, currentUser }) {
           </p>
 
           <form id="form-beekeeper" onSubmit={handleSubmit}>
+            {!formData.imageBase64 && (
+              <div style={{ background: '#fef3c7', border: '2px solid #b45309', color: '#78350f', padding: '12px 16px', borderRadius: '6px', marginBottom: '16px', fontWeight: 700, fontSize: '0.88rem' }}>
+                📢 <strong>Beekeeper Action Required:</strong> Please upload the mandatory comb frame photo evidence below to register this honey batch and generate its national QR code.
+              </div>
+            )}
+
             <div className="form-group">
               <label>Custom Batch Identifier (Optional)</label>
               <input 
@@ -723,14 +729,33 @@ function BeekeeperView({ authToken, currentUser }) {
 
         <div>
           {generatedBatch && (
-            <div id="bk-qr-box" className="qr-card-box">
-              <h4 style={{ fontSize: '1.2rem', fontWeight: 900 }}>BATCH ID: {generatedBatch.batchId}</h4>
-              <img className="qr-img" src={generatedBatch.qrCodeDataUrl} alt="Batch QR Code" />
-              <div className="hash-box">
+            <div id="bk-qr-box" className="qr-card-box" style={{ background: '#fffdf0', border: '3px solid #000', padding: '20px', borderRadius: '8px', marginBottom: '20px', textAlign: 'center' }}>
+              <div style={{ background: '#22c55e', color: '#fff', fontWeight: 900, padding: '6px 12px', borderRadius: '4px', display: 'inline-block', marginBottom: '12px', fontSize: '0.85rem' }}>
+                ✓ BATCH REGISTERED & QR GENERATED
+              </div>
+              <h4 style={{ fontSize: '1.25rem', fontWeight: 900, margin: '6px 0' }}>BATCH ID: {generatedBatch.batchId}</h4>
+              
+              <a href={`/consumer?batchId=${encodeURIComponent(generatedBatch.batchId)}`} target="_blank" rel="noopener noreferrer" title="Click to open full provenance details on a new page">
+                <img className="qr-img" src={generatedBatch.qrCodeDataUrl} alt="Batch QR Code" style={{ cursor: 'pointer', margin: '12px auto' }} />
+              </a>
+
+              <div className="hash-box" style={{ marginTop: '12px' }}>
                 <span>SHA-256 Ledger Hash Signature:</span>
                 <div style={{ color: '#d97706', marginTop: '4px', fontWeight: 700, wordBreak: 'break-all', fontSize: '0.75rem' }}>
                   {generatedBatch.sha256Hash}
                 </div>
+              </div>
+
+              <div style={{ marginTop: '16px' }}>
+                <a 
+                  href={`/consumer?batchId=${encodeURIComponent(generatedBatch.batchId)}`} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="btn-yellow" 
+                  style={{ display: 'block', textAlign: 'center', textDecoration: 'none', fontWeight: 800, padding: '10px 16px', fontSize: '0.95rem' }}
+                >
+                  🔗 Open Generated Details Page (New Window)
+                </a>
               </div>
             </div>
           )}
@@ -744,7 +769,15 @@ function BeekeeperView({ authToken, currentUser }) {
                 batches.map(b => (
                   <div key={b.batchId} style={{ background: '#fdfbf7', border: '2px solid #000', padding: '12px', borderRadius: '6px', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800 }}>
-                      <span>{b.batchId}</span>
+                      <a 
+                        href={`/consumer?batchId=${encodeURIComponent(b.batchId)}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ color: '#000', textDecoration: 'underline' }}
+                        title="View batch details on new page"
+                      >
+                        {b.batchId} 🔗
+                      </a>
                       <span className={`badge-status ${b.status === 'FAILED_QUALITY_TEST' ? 'FAIL' : 'PASS'}`}>{b.status}</span>
                     </div>
                     <div style={{ fontSize: '0.85rem', marginTop: '4px', color: '#333' }}>{b.cropDetails?.cropName}</div>
@@ -1069,8 +1102,12 @@ function ConsumerView({ selectedBatchId, setCurrentView }) {
 
   useEffect(() => {
     fetchAvailableBatches();
-    verifyBatch(batchIdInput);
-  }, []);
+    const params = new URLSearchParams(window.location.search);
+    const urlBatchId = params.get('batchId');
+    const activeId = urlBatchId || selectedBatchId || 'BATCH-2026-HIM-101';
+    setBatchIdInput(activeId);
+    verifyBatch(activeId);
+  }, [selectedBatchId]);
 
   const fetchAvailableBatches = async () => {
     try {

@@ -22,8 +22,15 @@ export default function App() {
   const [selectedBatchId, setSelectedBatchId] = useState('BATCH-2026-HIM-101');
 
   useEffect(() => {
-    // Handle URL pathname routing on initial load
+    // Handle URL pathname and query param routing on initial load
     const path = window.location.pathname.toLowerCase();
+    const params = new URLSearchParams(window.location.search);
+    const bId = params.get('batchId');
+
+    if (bId) {
+      setSelectedBatchId(bId);
+    }
+
     if (path === '/login') setCurrentView('login');
     else if (path === '/beekeeper') setCurrentView('beekeeper');
     else if (path === '/tester') setCurrentView('tester');
@@ -31,6 +38,7 @@ export default function App() {
     else if (path === '/consumer') setCurrentView('consumer');
     else if (path === '/feedback') setCurrentView('feedback');
     else if (path === '/contact') setCurrentView('contact');
+    else if (bId) setCurrentView('consumer');
   }, []);
 
   const handleLoginSuccess = (token, profile, redirectRoute) => {

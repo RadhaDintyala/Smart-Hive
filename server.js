@@ -342,7 +342,9 @@ app.post('/api/beekeeper/batch/create', authenticateSession, async (req, res) =>
     const rawPayload = JSON.stringify({ batchId, beekeeper: req.session.profile.name, iotSensorDetails, cropDetails });
     const sha256Hash = crypto.createHash('sha256').update(rawPayload + imageBase64).digest('hex');
 
-    const verifyUrl = `http://localhost:3000/consumer?batchId=${batchId}`;
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const host = req.get('host') || 'localhost:3000';
+    const verifyUrl = `${protocol}://${host}/consumer?batchId=${batchId}`;
     const qrCodeDataUrl = await QRCode.toDataURL(verifyUrl, { margin: 2, color: { dark: '#0a0a0a', light: '#ffffff' } });
 
     const newBatch = {

@@ -1,12 +1,12 @@
 :root {
-    --bg-warm: #f7f4eb;
-    --bg-card: #ffffff;
-    --border-black: #000000;
-    --shadow-black: 4px 4px 0px #000000;
-    --shadow-black-lg: 6px 6px 0px #000000;
+    --bg-warm: #f4f0e6;
+    --bg-card: rgba(255, 255, 255, 0.75);
+    --border-black: rgba(0, 0, 0, 0.1);
+    --shadow-black: 0 8px 25px rgba(0, 0, 0, 0.05);
+    --shadow-black-lg: 0 16px 40px rgba(31, 38, 135, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.6);
     
-    --text-primary: #0a0a0a;
-    --text-muted: #555555;
+    --text-primary: #0f172a;
+    --text-muted: #475569;
     
     --yellow-accent: #f5b814;
     --yellow-hover: #e0a70f;
@@ -25,7 +25,11 @@
 
 body {
     font-family: var(--font-sans);
-    background-color: var(--bg-warm);
+    background: radial-gradient(circle at 12% 18%, rgba(245, 184, 20, 0.16), transparent 45%),
+                radial-gradient(circle at 88% 75%, rgba(34, 197, 94, 0.14), transparent 45%),
+                radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.06), transparent 60%),
+                linear-gradient(135deg, #f8fafc 0%, #f1f5f9 45%, #fef3c7 100%);
+    background-attachment: fixed;
     color: var(--text-primary);
     min-height: 100vh;
     display: flex;
@@ -35,8 +39,11 @@ body {
 
 /* ═══════════════ REACT APP HEADER ═══════════════ */
 .app-header {
-    background-color: var(--bg-warm);
-    border-bottom: 2px solid var(--border-black);
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(24px) saturate(200%);
+    -webkit-backdrop-filter: blur(24px) saturate(200%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
     padding: 16px 40px;
     display: flex;
     align-items: center;
@@ -565,14 +572,21 @@ body {
     margin: 16px 0;
 }
 
-/* ═══════════════ COMMON CARDS & FORMS ═══════════════ */
+/* ═══════════════ COMMON CARDS & FORMS (GLASSMORPHISM) ═══════════════ */
 .neo-card {
-    background-color: var(--bg-card);
-    border: 2px solid var(--border-black);
-    box-shadow: var(--shadow-black-lg);
-    border-radius: 8px;
-    padding: 36px;
+    background: rgba(255, 255, 255, 0.76);
+    backdrop-filter: blur(20px) saturate(190%);
+    -webkit-backdrop-filter: blur(20px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 12px 36px 0 rgba(31, 38, 135, 0.06), inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+    border-radius: 20px;
+    padding: 32px;
     margin-bottom: 30px;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.neo-card:hover {
+    box-shadow: 0 18px 45px 0 rgba(245, 184, 20, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.9);
 }
 
 .neo-card-title {
@@ -580,6 +594,7 @@ body {
     font-weight: 900;
     color: var(--text-primary);
     margin-bottom: 8px;
+    letter-spacing: -0.01em;
 }
 
 .neo-card-subtitle {
@@ -600,21 +615,26 @@ body {
     margin-bottom: 8px;
 }
 
-.neo-input {
+.neo-input, input[type="text"], input[type="number"], input[type="date"], select, textarea {
     width: 100%;
-    padding: 12px 16px;
-    background: #ffffff;
-    border: 2px solid var(--border-black);
-    border-radius: 4px;
+    padding: 12px 18px;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 14px;
     font-family: var(--font-sans);
     font-size: 0.95rem;
     color: var(--text-primary);
-    transition: all 0.15s ease;
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.neo-input:focus {
+.neo-input:focus, input:focus, select:focus, textarea:focus {
     outline: none;
-    box-shadow: 3px 3px 0px #000;
+    background: rgba(255, 255, 255, 0.95);
+    border-color: #f5b814;
+    box-shadow: 0 0 0 4px rgba(245, 184, 20, 0.25), inset 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .grid-2col {
@@ -642,44 +662,173 @@ body {
 }
 
 .btn-yellow {
-    background-color: var(--yellow-accent);
-    color: var(--text-primary);
-    border: 2px solid var(--border-black);
-    box-shadow: var(--shadow-black);
+    background: linear-gradient(135deg, #f5b814 0%, #e0a70f 100%);
+    color: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 24px rgba(245, 184, 20, 0.35);
     padding: 14px 32px;
     font-size: 1rem;
     font-weight: 800;
     cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.15s ease;
+    border-radius: 14px;
+    transition: all 0.2s ease;
     text-decoration: none;
     display: inline-block;
 }
 
 .btn-yellow:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 6px 6px 0px #000;
-    background-color: var(--yellow-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(245, 184, 20, 0.48);
+    background: linear-gradient(135deg, #f7bf28 0%, #e5ac15 100%);
 }
 
 .btn-white {
-    background-color: #ffffff;
-    color: var(--text-primary);
-    border: 2px solid var(--border-black);
-    box-shadow: var(--shadow-black);
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #0f172a;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
     padding: 14px 32px;
     font-size: 1rem;
     font-weight: 800;
     cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.15s ease;
+    border-radius: 14px;
+    transition: all 0.2s ease;
     text-decoration: none;
     display: inline-block;
 }
 
 .btn-white:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 6px 6px 0px #000;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.09);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+/* ═══════════════ FULL-SCREEN STEPPER BATCH REGISTRATION CARD ═══════════════ */
+.full-screen-batch-card {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(25px) saturate(200%);
+    -webkit-backdrop-filter: blur(25px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    border-radius: 24px;
+    padding: 32px;
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+    margin-bottom: 32px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.stepper-header-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+}
+
+.stepper-step-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 18px;
+    border-radius: 16px;
+    background: rgba(241, 245, 249, 0.65);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(10px);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: #475569;
+    white-space: nowrap;
+}
+
+.stepper-step-pill:hover {
+    background: rgba(255, 255, 255, 0.95);
+    color: #0f172a;
+    transform: translateY(-2px);
+}
+
+.stepper-step-pill.active {
+    background: linear-gradient(135deg, rgba(245, 184, 20, 0.25), rgba(217, 119, 6, 0.18));
+    border: 1.5px solid #f5b814;
+    color: #92400e;
+    font-weight: 900;
+    box-shadow: 0 6px 20px rgba(245, 184, 20, 0.25);
+}
+
+.stepper-step-pill.completed {
+    background: rgba(34, 197, 94, 0.14);
+    border: 1px solid rgba(34, 197, 94, 0.35);
+    color: #166534;
+}
+
+.step-number-badge {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 900;
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.stepper-step-pill.active .step-number-badge {
+    background: #f5b814;
+    color: #000;
+}
+
+.stepper-step-pill.completed .step-number-badge {
+    background: #22c55e;
+    color: #fff;
+}
+
+.stepper-progress-bar-track {
+    width: 100%;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 28px;
+}
+
+.stepper-progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #f5b814 0%, #22c55e 100%);
+    transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 999px;
+}
+
+.glass-section-box {
+    background: rgba(255, 255, 255, 0.68);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    border-radius: 18px;
+    padding: 24px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.03);
+    margin-bottom: 24px;
+}
+
+.glass-section-title {
+    font-size: 1.15rem;
+    font-weight: 900;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.glass-section-desc {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-bottom: 20px;
 }
 
 /* Batch Cards Selection Grid */

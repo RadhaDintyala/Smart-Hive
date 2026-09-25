@@ -14,6 +14,10 @@ const wss = new WebSocket.Server({ server });
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '30mb' }));
 
+// Mount Hyperledger Fabric 2.5 & IPFS Blockchain Router
+const fabricRouter = require('./blockchain/fabricRouter');
+app.use('/api/blockchain', fabricRouter);
+
 // ==========================================
 // 1. MONGODB DATABASE CONFIGURATION & SCHEMAS
 // ==========================================

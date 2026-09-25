@@ -38,20 +38,28 @@
 </aside>
 
 <main class="app-container">
-    <div style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;">
+    <div style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <div>
-            <h1 style="font-size:1.8rem;font-weight:900;">🐝 Beekeeper Harvest & IoT Registry</h1>
-            <p style="color:var(--text-muted);font-size:0.95rem;">Log IoT microclimate data, acoustics, comb photo evidence, and yield metrics for cryptographic batch verification.</p>
+            <h1 style="font-size:2rem;font-weight:900;color:#0f172a;">🐝 Beekeeper Harvest & Hive Dashboard</h1>
+            <p style="color:var(--text-muted);font-size:0.95rem;margin-top:4px;">Log IoT microclimate data, acoustics, comb photo evidence, and yield metrics for cryptographic batch verification.</p>
         </div>
     </div>
 
-    <div class="grid-2col">
-        <!-- BEEKEEPER BATCH FORM -->
-        <div class="neo-card">
-            <h3 class="neo-card-title">Register New Honey Batch</h3>
-            <p class="neo-card-subtitle" style="margin-bottom:16px;">* Photo Evidence is MANDATORY for batch registration.</p>
+    <!-- FULL SCREEN BATCH REGISTRATION CARD -->
+    <div class="full-screen-batch-card">
+        <div style="margin-bottom:20px;">
+            <h2 style="font-size:1.5rem;font-weight:900;color:#0f172a;">🍯 Register New Honey Batch</h2>
+            <p style="color:var(--text-muted);font-size:0.9rem;margin-top:4px;">Section-by-section registration workflow for immutable blockchain ledger minting.</p>
+        </div>
 
-            <form id="form-beekeeper">
+        <form id="form-beekeeper">
+            <!-- SECTION 1: HARVEST & FLORA -->
+            <div class="glass-section-box">
+                <div class="glass-section-title">
+                    <span>🍯</span> Section 1: Harvest & Floral Specification
+                </div>
+                <div class="glass-section-desc">Specify crop details, floral source, harvest date, and yield weight.</div>
+
                 <div class="form-group">
                     <label>Custom Batch Identifier (Optional)</label>
                     <input type="text" id="bk-batch-id" class="neo-input" placeholder="e.g. BATCH-2026-HIM-102">
@@ -78,6 +86,14 @@
                         <input type="number" step="0.1" id="bk-yield-qty" class="neo-input" value="120.0" required>
                     </div>
                 </div>
+            </div>
+
+            <!-- SECTION 2: HIVE TELEMETRY -->
+            <div class="glass-section-box">
+                <div class="glass-section-title">
+                    <span>🐝</span> Section 2: Hive Telemetry & IoT Microclimate
+                </div>
+                <div class="glass-section-desc">Recorded IoT sensors metrics for hive brood microclimate.</div>
 
                 <div class="form-row">
                     <div class="form-group">
@@ -105,6 +121,14 @@
                     <label>VOC Gas Level (ppm) *</label>
                     <input type="number" step="1" id="bk-voc" class="neo-input" value="115" required>
                 </div>
+            </div>
+
+            <!-- SECTION 3: ACOUSTIC & AI -->
+            <div class="glass-section-box">
+                <div class="glass-section-title">
+                    <span>🎵</span> Section 3: Acoustic Spectrogram & Edge AI
+                </div>
+                <div class="glass-section-desc">Vibrational frequency spectrum analysis for queen bee flight and swarm signals.</div>
 
                 <div class="form-row">
                     <div class="form-group">
@@ -116,40 +140,40 @@
                         <input type="number" step="1" id="bk-audio-freq" class="neo-input" value="225">
                     </div>
                 </div>
+            </div>
 
-                <!-- MANDATORY IMAGE UPLOAD FIELD -->
-                <div class="form-group" style="background:#fffbe6;padding:16px;border:2px dashed #000;border-radius:6px;margin-bottom:20px;">
-                    <label style="font-weight:900;color:#92400e;">📷 Mandatory Frame / Comb Image Upload *</label>
-                    <p style="font-size:0.8rem;color:#78350f;margin-bottom:8px;">Form submission is locked until a photo evidence of the sealed comb frame is selected.</p>
-                    <input type="file" id="bk-image-file" class="neo-input" accept="image/*" required style="background:#ffffff;">
-                    <div id="image-preview-container" style="margin-top:10px;display:none;">
-                        <img id="bk-image-preview" src="" alt="Frame Preview" style="max-height:140px;border:2px solid #000;border-radius:4px;">
-                    </div>
-                    <input type="text" id="bk-image-caption" class="neo-input" placeholder="Image Caption e.g. Sealed honeycomb frame evidence" value="Sealed honeycomb frame prior to extraction" style="margin-top:8px;">
+            <!-- SECTION 4: MANDATORY PHOTO & GEOTAG -->
+            <div class="glass-section-box" style="background:rgba(254, 252, 232, 0.75);border:1px dashed #d97706;">
+                <div class="glass-section-title" style="color:#92400e;">
+                    <span>📷</span> Section 4: Mandatory Comb Photo Evidence & GPS Geotag *
                 </div>
+                <p style="font-size:0.85rem;color:#78350f;margin-bottom:12px;">Select or take direct camera photo of sealed honeycomb frame prior to extraction.</p>
+                <input type="file" id="bk-image-file" class="neo-input" accept="image/*" required style="background:#ffffff;">
+                <div id="image-preview-container" style="margin-top:12px;display:none;">
+                    <img id="bk-image-preview" src="" alt="Frame Preview" style="max-height:140px;border-radius:10px;border:1px solid #000;">
+                </div>
+                <input type="text" id="bk-image-caption" class="neo-input" placeholder="Image Caption e.g. Sealed honeycomb frame evidence" value="Sealed honeycomb frame prior to extraction" style="margin-top:10px;">
+            </div>
 
-                <button type="submit" class="btn-yellow full-width" style="width:100%;font-size:1.05rem;">Submit Batch & Generate National QR Code</button>
-            </form>
+            <button type="submit" class="btn-yellow full-width" style="width:100%;font-size:1.05rem;padding:16px;margin-top:12px;">⚡ Submit Batch & Generate National QR Code</button>
+        </form>
+
+        <div id="bk-qr-box" class="qr-card-box" style="display:none;margin-top:24px;background:rgba(255, 253, 240, 0.95);border:2px solid #f5b814;padding:24px;border-radius:20px;text-align:center;">
+            <h4 id="bk-qr-title" style="font-size:1.3rem;font-weight:900;">BATCH ID</h4>
+            <img id="bk-qr-img" class="qr-img" src="" alt="Batch QR Code" style="margin:12px auto;">
+            <div class="hash-box">
+                <span>SHA-256 Ledger Hash Signature:</span>
+                <div id="bk-qr-hash" style="color:#d97706;margin-top:4px;font-weight:700;">--</div>
+            </div>
+            <a id="bk-qr-link" href="#" target="_blank" class="btn-yellow" style="margin-top:14px;display:inline-block;text-decoration:none;">🔗 Open Consumer Verification Link</a>
         </div>
+    </div>
 
-        <!-- RIGHT SIDE: GENERATED QR & BATCH LIST -->
-        <div>
-            <div id="bk-qr-box" class="qr-card-box" style="display:none;">
-                <h4 id="bk-qr-title" style="font-size:1.2rem;font-weight:900;">BATCH ID</h4>
-                <img id="bk-qr-img" class="qr-img" src="" alt="Batch QR Code">
-                <div class="hash-box">
-                    <span>SHA-256 Ledger Hash Signature:</span>
-                    <div id="bk-qr-hash" style="color:#d97706;margin-top:4px;font-weight:700;">--</div>
-                </div>
-                <a id="bk-qr-link" href="#" target="_blank" class="btn-white" style="margin-top:14px;display:inline-block;text-decoration:none;">🔗 Open Consumer Verification Link</a>
-            </div>
-
-            <div class="neo-card">
-                <h3 class="neo-card-title">Your Registered Honey Batches</h3>
-                <div id="bk-batches-list">
-                    <p style="color:var(--text-muted);font-size:0.85rem;">Loading registered batches...</p>
-                </div>
-            </div>
+    <!-- REGISTERED BATCHES LIST -->
+    <div class="neo-card" style="margin-top:32px;">
+        <h3 class="neo-card-title">Your Registered Honey Batches</h3>
+        <div id="bk-batches-list">
+            <p style="color:var(--text-muted);font-size:0.85rem;">Loading registered batches...</p>
         </div>
     </div>
 </main>

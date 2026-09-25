@@ -1,12 +1,12 @@
 :root {
-    --bg-warm: #f7f4eb;
-    --bg-card: #ffffff;
-    --border-black: #000000;
-    --shadow-black: 4px 4px 0px #000000;
-    --shadow-black-lg: 6px 6px 0px #000000;
+    --bg-warm: #f4f0e6;
+    --bg-card: rgba(255, 255, 255, 0.75);
+    --border-black: rgba(0, 0, 0, 0.1);
+    --shadow-black: 0 8px 25px rgba(0, 0, 0, 0.05);
+    --shadow-black-lg: 0 16px 40px rgba(31, 38, 135, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.6);
     
-    --text-primary: #0a0a0a;
-    --text-muted: #555555;
+    --text-primary: #0f172a;
+    --text-muted: #475569;
     
     --yellow-accent: #f5b814;
     --yellow-hover: #e0a70f;
@@ -25,7 +25,11 @@
 
 body {
     font-family: var(--font-sans);
-    background-color: var(--bg-warm);
+    background: radial-gradient(circle at 12% 18%, rgba(245, 184, 20, 0.16), transparent 45%),
+                radial-gradient(circle at 88% 75%, rgba(34, 197, 94, 0.14), transparent 45%),
+                radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.06), transparent 60%),
+                linear-gradient(135deg, #f8fafc 0%, #f1f5f9 45%, #fef3c7 100%);
+    background-attachment: fixed;
     color: var(--text-primary);
     min-height: 100vh;
     display: flex;
@@ -491,16 +495,7 @@ body {
     color: var(--text-muted);
     line-height: 1.5;
 }
-    border: 2px solid #000000;
-    box-shadow: 4px 4px 0px #000000;
-    padding: 14px 28px;
-    font-size: 0.95rem;
-    font-weight: 800;
-    text-decoration: none;
-    border-radius: 4px;
-    transition: all 0.15s ease;
-    display: inline-block;
-}
+
 
 .btn-hero-yellow:hover {
     transform: translate(-2px, -2px);

@@ -65,24 +65,31 @@ export default function App() {
     setCurrentView('login');
   };
 
+  const isConsumerView = currentView === 'consumer';
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Header 
-        currentView={currentView}
-        setCurrentView={setCurrentView}
-        currentUser={currentUser}
-        onLogout={handleLogout}
-        toggleSidebar={() => setSidebarOpen(prev => !prev)}
-      />
+      {/* Hide Header on Public Consumer Verification View */}
+      {!isConsumerView && (
+        <Header 
+          currentView={currentView}
+          setCurrentView={setCurrentView}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          toggleSidebar={() => setSidebarOpen(prev => !prev)}
+        />
+      )}
 
-      <SidebarDrawer 
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        currentView={currentView}
-        setCurrentView={setCurrentView}
-        currentUser={currentUser}
-        onSelectRole={handleSelectRoleFromDrawer}
-      />
+      {!isConsumerView && (
+        <SidebarDrawer 
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          currentView={currentView}
+          setCurrentView={setCurrentView}
+          currentUser={currentUser}
+          onSelectRole={handleSelectRoleFromDrawer}
+        />
+      )}
 
       <div style={{ flex: 1 }}>
         {currentView === 'home' && (
@@ -113,7 +120,7 @@ export default function App() {
         {currentView === 'contact' && <ContactView />}
       </div>
 
-      <Footer setCurrentView={setCurrentView} />
+      {!isConsumerView && <Footer setCurrentView={setCurrentView} />}
     </div>
   );
 }

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Hive AI Monitoring</title>
+    <script src="https://tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 p-8 min-h-screen">
+
+    <div class="max-w-6xl mx-auto">
+        <!-- Dashboard Top Header Bar -->
+        <div class="flex justify-between items-center border-b border-slate-700 pb-4 mb-6">
+          <div>
+            <h1 class="text-3xl font-extrabold text-amber-400">🐝 AI-IoT Live Monitor</h1>
+            <p id="sub-header" class="text-slate-400 text-sm">Waiting for edge node connections...</p>
+          </div>
+          <div id="status-badge" class="px-4 py-2 rounded-full font-bold text-sm bg-slate-700 text-slate-300">
+            CONNECTING...
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Data Panels -->
+            <div class="lg:col-span-2 grid grid-cols-2 gap-4">
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                    <span class="text-slate-400 text-xs block mb-1 uppercase tracking-wider">Temperature</span>
+                    <span id="metric-temp" class="text-3xl font-bold">-- °C</span>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                    <span class="text-slate-400 text-xs block mb-1 uppercase tracking-wider">Humidity</span>
+                    <span id="metric-humid" class="text-3xl font-bold">-- %</span>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                    <span class="text-slate-400 text-xs block mb-1 uppercase tracking-wider">Total Weight</span>
+                    <span id="metric-weight" class="text-3xl font-bold">-- kg</span>
+                </div>
+                <div id="voc-box" class="bg-slate-800 p-6 rounded-xl border border-slate-700 transition-colors duration-500">
+                    <span class="text-slate-400 text-xs block mb-1 uppercase tracking-wider">VOC Gas</span>
+                    <span id="metric-voc" class="text-3xl font-bold">-- ppm</span>
+                </div>
+            </div>
+
+            <!-- Right Engine Diagnostics Panels -->
+            <div class="flex flex-col gap-6">
+                <div id="classification-box" class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 mb-2 uppercase">CNN Diagnostic Status</h3>
+                    <p id="ai-status" class="font-bold text-base">Running evaluations...</p>
+                    <p id="ai-confidence" class="text-xs text-slate-400 mt-1"></p>
+                </div>
+
+                <div class="bg-gradient-to-br from-amber-500/10 to-orange-500/10 p-6 rounded-xl border border-amber-500/30 flex-1">
+                    <h3 class="text-xs font-semibold tracking-wider text-amber-400 mb-3 uppercase">🤖 Qwen2.5 Local Recommendations</h3>
+                    <p id="llm-rec" class="text-slate-300 text-sm leading-relaxed bg-slate-950/60 p-4 rounded-lg border border-slate-800">
+                        Gathering ambient telemetry registers...
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Proof Hash Row -->
+        <div class="mt-6 bg-slate-950 p-4 rounded-lg border border-slate-800 font-mono text-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <span class="text-emerald-400">🔒 IMMUTABLE SECURITY INTEGRITY RECEIPT:</span>
+            <span id="crypto-hash" class="text-slate-400 break-all bg-slate-900 px-2 py-1 rounded">--</span>
+        </div>
+    </div>
+
+    <!-- Active REST API Parsing Automation Script -->
+    <script>
+        async function updateDashboard() {
+            try {
+                const response = await fetch('http://localhost:5000/api/hive/telemetry');
+                const data = await response.json();
+                
+                const metrics = data.telemetry_data.metrics;
+                const isCritical = data.ai_analysis.status_code === 'CRITICAL';
+
+                // Update text targets
+                document.getElementById('sub-header').innerText = `Node ID: ${data.telemetry_data.hive_node_id} | Scenario: ${data.telemetry_data.scenario_mode}`;
+                document.getElementById('metric-temp').innerText = `${metrics.temperature_c} °C`;
+                document.getElementById('metric-humid').innerText = `${metrics.humidity_pct} %`;
+                document.getElementById('metric-weight').innerText = `${metrics.total_weight_kg} kg`;
+                document.getElementById('metric-voc').innerText = `${metrics.gas_voc_ppm} ppm`;
+                document.getElementById('ai-status').innerText = data.ai_analysis.inferred_health_status;
+                document.getElementById('ai-confidence').innerText = `Model Confidence Accuracy: ${data.ai_analysis.model_confidence_pct}%`;
+                document.getElementById('llm-rec').innerText = data.ai_analysis.ai_recommendation;
+                document.getElementById('crypto-hash').innerText = data.cryptographic_hash_signature;
+
+                // Toggle interactive warning color schemes
+                const badge = document.getElementById('status-badge');
+                const vocBox = document.getElementById('voc-box');
+                const classBox = document.getElementById('classification-box');
+
+                if (isCritical) {
+                    badge.className = "px-4 py-2 rounded-full font-bold text-sm bg-red-500 animate-pulse text-white";
+                    badge.innerText = "🚨 CRITICAL SYSTEM ALERT";
+                    vocBox.className = "p-6 rounded-xl border bg-red-950/40 border-red-500 transition-colors duration-500";
+                    classBox.className = "p-6 rounded-xl border bg-red-900/20 border-red-500/50";
+                } else {
+                    badge.className = "px-4 py-2 rounded-full font-bold text-sm bg-emerald-500 text-slate-900";
+                    badge.innerText = "✅ SYSTEM STABLE";
+                    vocBox.className = "bg-slate-800 p-6 rounded-xl border border-slate-700 transition-colors duration-500";
+                    classBox.className = "bg-slate-800 p-6 rounded-xl border border-slate-700";
+                }
+            } catch (err) {
+                console.error("Dashboard engine query breakdown:", err);
+            }
+        }
+
+        updateDashboard();
+        setInterval(updateDashboard, 4000); // Poll API endpoint every 4 seconds
+    </script>
+</body>
+</html>

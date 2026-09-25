@@ -21,7 +21,7 @@ app.use('/api/blockchain', fabricRouter);
 // ==========================================
 // 0. EDGE AI ANALYTICS PROXY -> Modeling/inference_service.py
 // ==========================================
-// The trained TensorFlow Lite model in ../Modeling is Python-only, so the
+// The trained TensorFlow Lite model in ./Modeling is Python-only, so the
 // browser cannot load it directly. The inference sidecar runs on its own port
 // and is proxied here, which keeps the frontend on a single origin (and keeps
 // the existing Vite `/api` -> :3000 proxy working unchanged).

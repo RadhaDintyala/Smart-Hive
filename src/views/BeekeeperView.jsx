@@ -1,5 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getStoredBatches, saveBatch } from '../services/batchStore';
+import FleetKpiHeader from '../components/FleetKpiHeader';
+import AiAnalyticsAccordion from '../components/AiAnalyticsAccordion';
+import BatchDetailsModal from '../components/BatchDetailsModal';
+import useGeotaggedCamera from '../hooks/useGeotaggedCamera';
+import { predictFleet } from '../services/fleetAnalytics';
 
 export default function BeekeeperView({ authToken, currentUser }) {
   const [batches, setBatches] = useState([]);
@@ -7,6 +12,7 @@ export default function BeekeeperView({ authToken, currentUser }) {
   const [activeStep, setActiveStep] = useState(1);
   const [viewMode, setViewMode] = useState('stepper'); // 'stepper' or 'all_sections'
   const [batchSearch, setBatchSearch] = useState('');
+  const [modalBatch, setModalBatch] = useState(null);
 
   // Start with clean empty fields - NO MOCK PRE-FILLED DATA
   const [formData, setFormData] = useState({
@@ -31,6 +37,11 @@ export default function BeekeeperView({ authToken, currentUser }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Native camera traceability engine. The gallery file input is deprecated:
+  // evidence must carry a live GPS fix and UTC instant taken at the shutter.
+  const camera = useGeotaggedCamera();
+  const [captureStamp, setCaptureStamp] = useState(null);
 
   useEffect(() => {
     fetchBatches();
@@ -57,21 +68,37 @@ export default function BeekeeperView({ authToken, currentUser }) {
     }
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      handleCaptureLocation();
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-        setFormData(prev => ({ 
-          ...prev, 
-          imageBase64: reader.result,
-          imageCaption: prev.imageCaption || `Sealed honeycomb frame evidence - ${file.name}`
-        }));
-      };
-      reader.readAsDataURL(file);
+  /**
+   * Shutter handler. The frame, the GPS fix and the UTC instant are bound into
+   * one payload object, so the metadata cannot drift away from the image.
+   */
+  const handleShutter = async () => {
+    const payload = await camera.capture();
+    if (!payload) return;
+
+    setCaptureStamp(payload.geo);
+    setImagePreview(payload.dataUrl);
+
+    // A real fix overwrites the display string; a denied sensor keeps the
+    // explicit provenance of the gap rather than silently faking coordinates.
+    if (payload.geo.source === 'gps') {
+      setGeoCoords(
+        `GPS: ${payload.geo.latitude.toFixed(4)}° N, ${payload.geo.longitude.toFixed(4)}° E`
+      );
     }
+
+    setFormData((prev) => ({
+      ...prev,
+      imageBase64: payload.dataUrl,
+      imageCaption: prev.imageCaption || 'Sealed honeycomb frame evidence',
+    }));
+  };
+
+  /** Drop the captured frame so a fresh, correctly stamped shot can be taken. */
+  const handleRetake = () => {
+    camera.reset();
+    setCaptureStamp(null);
+    setFormData((prev) => ({ ...prev, imageBase64: '' }));
   };
 
   const handleAudioFileChange = (e) => {
@@ -173,6 +200,16 @@ export default function BeekeeperView({ authToken, currentUser }) {
       audioFreq: formData.audioFreq || '225',
       imageCaption: `${formData.imageCaption || 'Sealed Comb Frame'} [Geotag: ${geoCoords}]`,
       imageBase64: formData.imageBase64,
+      // Traceability metadata bound at the shutter, not at submit time.
+      evidenceCapturedAtUtc: captureStamp ? captureStamp.capturedAtUtc : null,
+      evidenceGeo: captureStamp
+        ? {
+            latitude: captureStamp.latitude,
+            longitude: captureStamp.longitude,
+            accuracy: captureStamp.accuracy,
+            source: captureStamp.source,
+          }
+        : null,
       geoCoords,
       txHash: `0x${Math.random().toString(16).substring(2)}${Math.random().toString(16).substring(2)}`,
       createdTimestamp: new Date().toISOString(),
@@ -198,6 +235,57 @@ export default function BeekeeperView({ authToken, currentUser }) {
     b.batchId.toLowerCase().includes(batchSearch.toLowerCase()) ||
     (b.cropName || b.cropDetails?.cropName || '').toLowerCase().includes(batchSearch.toLowerCase())
   );
+
+  /**
+   * Fleet telemetry samples handed to the edge model. One sample per registered
+   * hive, derived from live batch state rather than hard-coded counters.
+   *
+   * @type {Array<{ hiveId?: string, vocPpm?: string, audioFreq?: string, temperature?: string, humidity?: string, weight?: string }>}
+   */
+  const fleet = useMemo(
+    () => batches.map((b) => ({
+      hiveId: b.hiveId || b.batchId,
+      vocPpm: b.vocPpm,
+      audioFreq: b.audioFreq,
+      temperature: b.temperature,
+      humidity: b.humidity,
+      weight: b.weight,
+    })),
+    [batches]
+  );
+
+  /**
+   * KPI counters. Computed from the fleet rather than hard-coded so the header
+   * cannot drift from reality. `verdicts` is the live edge-model output; until
+   * it resolves we fall back to the VOC alert threshold only.
+   */
+  const [verdicts, setVerdicts] = useState(null);
+  const [isModelDegraded, setIsModelDegraded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (fleet.length === 0) {
+      setVerdicts([]);
+      return undefined;
+    }
+
+    predictFleet(fleet).then((results) => {
+      if (cancelled) return;
+      setVerdicts(results);
+      setIsModelDegraded(results.some((r) => r.degraded));
+    });
+
+    return () => { cancelled = true; };
+  }, [fleet]);
+
+  const totalHives = fleet.length;
+  const possibleInfected = verdicts
+    ? verdicts.filter((v) => v.infected).length
+    : fleet.filter((h) => Number(h.vocPpm) > 300).length;
+  const inProduction = totalHives - possibleInfected;
+  const infectedDetail = possibleInfected > 0
+    ? `Flagged by acoustic/VOC analysis (${fleet.filter((h, i) => verdicts && verdicts[i] && verdicts[i].infected).map((h) => h.hiveId).join(', ')})`
+    : 'No infection vectors detected';
 
   const isStep1Done = Boolean(formData.cropName && formData.floralSource && formData.harvestStartDate && formData.yieldQuantityKg);
   const isStep2Done = Boolean(formData.hiveId && formData.temperature && formData.humidity && formData.weight && formData.vocPpm);
@@ -241,100 +329,18 @@ export default function BeekeeperView({ authToken, currentUser }) {
           </div>
         </div>
 
-        {/* 3 GLASS SUMMARY STATS CARDS */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: '20px',
-          marginTop: '22px'
-        }}>
-          <div className="neo-card" style={{ padding: '20px', background: 'rgba(254, 240, 138, 0.45)', border: '1px solid rgba(245, 184, 20, 0.4)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', color: '#854d0e', letterSpacing: '0.05em' }}>Total Hives</span>
-              <span style={{ fontSize: '1.2rem' }}>🍯</span>
-            </div>
-            <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#0f172a', marginTop: '4px' }}>48 Hives</div>
-            <div style={{ fontSize: '0.8rem', color: '#713f12', marginTop: '4px', fontWeight: 600 }}>Himalayan Apiary Sector 4</div>
-          </div>
-
-          <div className="neo-card" style={{ padding: '20px', background: 'rgba(254, 226, 226, 0.45)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', color: '#991b1b', letterSpacing: '0.05em' }}>Infected Alert</span>
-              <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-            </div>
-            <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#dc2626', marginTop: '4px' }}>2 Hives</div>
-            <div style={{ fontSize: '0.8rem', color: '#991b1b', marginTop: '4px', fontWeight: 600 }}>Foulbrood VOC alert (HIVE-08, HIVE-12)</div>
-          </div>
-
-          <div className="neo-card" style={{ padding: '20px', background: 'rgba(220, 252, 231, 0.45)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', color: '#166534', letterSpacing: '0.05em' }}>Active Production</span>
-              <span style={{ fontSize: '1.2rem' }}>✨</span>
-            </div>
-            <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#15803d', marginTop: '4px' }}>46 Hives</div>
-            <div style={{ fontSize: '0.8rem', color: '#166534', marginTop: '4px', fontWeight: 600 }}>Healthy comb status & high yield</div>
-          </div>
-        </div>
+        {/* FLEET KPI METRICS HEADER */}
+        <FleetKpiHeader
+          totalHives={totalHives}
+          possibleInfected={possibleInfected}
+          inProduction={inProduction}
+          infectedDetail={infectedDetail}
+          isDegraded={isModelDegraded}
+        />
       </div>
 
-      {/* 🤖 SUBSECTION: AI-ENABLED METRICS */}
-      <div className="neo-card" style={{ marginBottom: '32px', background: 'rgba(248, 250, 252, 0.75)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-          <div>
-            <h3 className="neo-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-              <span>🤖</span> AI-Enabled Hive Intelligence Metrics
-            </h3>
-            <p style={{ fontSize: '0.88rem', color: '#64748b', margin: '4px 0 0 0' }}>
-              Real-time Edge AI Acoustic Spectrogram Analysis and Production Forecast:
-            </p>
-          </div>
-          <span style={{ background: 'rgba(37, 99, 235, 0.12)', color: '#2563eb', padding: '4px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 800, border: '1px solid rgba(37, 99, 235, 0.25)' }}>
-            ⚡ Edge AI Active
-          </span>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px' }}>
-          <div style={{ background: 'rgba(255, 255, 255, 0.85)', border: '1px solid rgba(0,0,0,0.08)', padding: '18px', borderRadius: '16px', boxShadow: '0 4px 14px rgba(0,0,0,0.03)' }}>
-            <div style={{ fontWeight: 800, fontSize: '0.95rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a' }}>
-              <span>🎵</span> Acoustic Audio Spectrum (225 Hz)
-            </div>
-            <div style={{ fontSize: '0.85rem', color: '#475569', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Swarm Risk Level:</span>
-                <span style={{ color: '#16a34a', fontWeight: 800, background: 'rgba(22, 163, 74, 0.12)', padding: '2px 8px', borderRadius: '6px' }}>LOW (4.2%)</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Queen Bee Frequency:</span>
-                <span style={{ color: '#d97706', fontWeight: 800 }}>Normal Flight Buzz</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Foulbrood Disease Signal:</span>
-                <span style={{ color: '#16a34a', fontWeight: 800 }}>CLEAN (0.1%)</span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ background: 'rgba(255, 255, 255, 0.85)', border: '1px solid rgba(0,0,0,0.08)', padding: '18px', borderRadius: '16px', boxShadow: '0 4px 14px rgba(0,0,0,0.03)' }}>
-            <div style={{ fontWeight: 800, fontSize: '0.95rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a' }}>
-              <span>📊</span> Honey Yield Forecast
-            </div>
-            <div style={{ fontSize: '0.85rem', color: '#475569', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Projected Season Yield:</span>
-                <span style={{ color: '#2563eb', fontWeight: 800 }}>124.5 kg</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Flow Rate:</span>
-                <span style={{ color: '#16a34a', fontWeight: 800 }}>+2.4 kg / day</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Optimal Harvest Date:</span>
-                <span style={{ color: '#d97706', fontWeight: 800 }}>March 28, 2026</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* 🤖 COLLAPSIBLE AI ANALYTICS SUBSECTION */}
+      <AiAnalyticsAccordion fleet={fleet} isDegraded={isModelDegraded} />
 
       {/* ═══════════════ REDESIGNED FULL SCREEN CARD: REGISTER NEW HONEY BATCH ═══════════════ */}
       <div className="full-screen-batch-card" id="register-batch-card">
@@ -365,20 +371,21 @@ export default function BeekeeperView({ authToken, currentUser }) {
             >
               ✨ Demo Sample Autofill
             </button>
-            <div style={{ background: 'rgba(241, 245, 249, 0.8)', padding: '4px', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', display: 'flex', gap: '4px' }}>
+            <div style={{ background: 'rgba(241, 245, 249, 0.9)', padding: '6px', borderRadius: '16px', border: '1px solid rgba(0,0,0,0.1)', display: 'flex', gap: '6px' }}>
               <button 
                 type="button"
                 onClick={() => setViewMode('stepper')}
                 style={{
-                  padding: '6px 14px',
-                  borderRadius: '8px',
+                  padding: '8px 18px',
+                  borderRadius: '12px',
                   border: 'none',
-                  background: viewMode === 'stepper' ? '#ffffff' : 'transparent',
-                  fontWeight: viewMode === 'stepper' ? 800 : 600,
-                  fontSize: '0.8rem',
-                  color: viewMode === 'stepper' ? '#0f172a' : '#64748b',
-                  boxShadow: viewMode === 'stepper' ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
-                  cursor: 'pointer'
+                  background: viewMode === 'stepper' ? 'linear-gradient(135deg, #f5b814 0%, #e0a70f 100%)' : 'transparent',
+                  fontWeight: viewMode === 'stepper' ? 900 : 700,
+                  fontSize: '0.85rem',
+                  color: viewMode === 'stepper' ? '#0f172a' : '#475569',
+                  boxShadow: viewMode === 'stepper' ? '0 4px 14px rgba(245, 184, 20, 0.35)' : 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
                 }}
               >
                 📑 Step-by-Step
@@ -387,15 +394,16 @@ export default function BeekeeperView({ authToken, currentUser }) {
                 type="button"
                 onClick={() => setViewMode('all_sections')}
                 style={{
-                  padding: '6px 14px',
-                  borderRadius: '8px',
+                  padding: '8px 18px',
+                  borderRadius: '12px',
                   border: 'none',
-                  background: viewMode === 'all_sections' ? '#ffffff' : 'transparent',
-                  fontWeight: viewMode === 'all_sections' ? 800 : 600,
-                  fontSize: '0.8rem',
-                  color: viewMode === 'all_sections' ? '#0f172a' : '#64748b',
-                  boxShadow: viewMode === 'all_sections' ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
-                  cursor: 'pointer'
+                  background: viewMode === 'all_sections' ? 'linear-gradient(135deg, #f5b814 0%, #e0a70f 100%)' : 'transparent',
+                  fontWeight: viewMode === 'all_sections' ? 900 : 700,
+                  fontSize: '0.85rem',
+                  color: viewMode === 'all_sections' ? '#0f172a' : '#475569',
+                  boxShadow: viewMode === 'all_sections' ? '0 4px 14px rgba(245, 184, 20, 0.35)' : 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
                 }}
               >
                 🔍 All Sections Grid
@@ -404,29 +412,188 @@ export default function BeekeeperView({ authToken, currentUser }) {
           </div>
         </div>
 
-        {/* STEPPER HEADER NAV */}
+        {/* STEPPER HEADER BUTTON NAV */}
         {viewMode === 'stepper' && (
-          <div className="stepper-header-nav" style={{ marginBottom: '24px' }}>
-            <div className={`stepper-pill ${activeStep === 1 ? 'active' : ''} ${isStep1Done ? 'done' : ''}`} onClick={() => setActiveStep(1)}>
-              <span>{isStep1Done ? '✓' : '1'}</span>
-              <span>🍯 1. Harvest & Flora</span>
-            </div>
-            <div className={`stepper-pill ${activeStep === 2 ? 'active' : ''} ${isStep2Done ? 'done' : ''}`} onClick={() => setActiveStep(2)}>
-              <span>{isStep2Done ? '✓' : '2'}</span>
+          <div className="stepper-header-nav" style={{ marginBottom: '24px', display: 'flex', gap: '10px', overflowX: 'auto', padding: '6px', background: 'rgba(255,255,255,0.75)', borderRadius: '20px', border: '1px solid rgba(0,0,0,0.08)' }}>
+            <button 
+              type="button" 
+              className={`stepper-step-btn ${activeStep === 1 ? 'active' : ''} ${isStep1Done ? 'done' : ''}`} 
+              onClick={() => setActiveStep(1)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 18px',
+                borderRadius: '14px',
+                border: activeStep === 1 ? '2px solid #d97706' : (isStep1Done ? '2px solid #22c55e' : '2px solid #e2e8f0'),
+                background: activeStep === 1 ? 'linear-gradient(135deg, #f5b814 0%, #e0a70f 100%)' : (isStep1Done ? '#f0fdf4' : '#ffffff'),
+                color: activeStep === 1 ? '#0f172a' : (isStep1Done ? '#166534' : '#475569'),
+                fontWeight: activeStep === 1 ? 900 : 800,
+                fontSize: '0.88rem',
+                cursor: 'pointer',
+                boxShadow: activeStep === 1 ? '0 6px 20px rgba(245, 184, 20, 0.35)' : 'none',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              <span style={{
+                background: activeStep === 1 ? '#0f172a' : (isStep1Done ? '#22c55e' : 'rgba(0,0,0,0.08)'),
+                color: '#ffffff',
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                fontWeight: 900
+              }}>{isStep1Done ? '✓' : '1'}</span>
+              <span>🍯 1. Harvest &amp; Flora</span>
+            </button>
+
+            <button 
+              type="button" 
+              className={`stepper-step-btn ${activeStep === 2 ? 'active' : ''} ${isStep2Done ? 'done' : ''}`} 
+              onClick={() => setActiveStep(2)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 18px',
+                borderRadius: '14px',
+                border: activeStep === 2 ? '2px solid #d97706' : (isStep2Done ? '2px solid #22c55e' : '2px solid #e2e8f0'),
+                background: activeStep === 2 ? 'linear-gradient(135deg, #f5b814 0%, #e0a70f 100%)' : (isStep2Done ? '#f0fdf4' : '#ffffff'),
+                color: activeStep === 2 ? '#0f172a' : (isStep2Done ? '#166534' : '#475569'),
+                fontWeight: activeStep === 2 ? 900 : 800,
+                fontSize: '0.88rem',
+                cursor: 'pointer',
+                boxShadow: activeStep === 2 ? '0 6px 20px rgba(245, 184, 20, 0.35)' : 'none',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              <span style={{
+                background: activeStep === 2 ? '#0f172a' : (isStep2Done ? '#22c55e' : 'rgba(0,0,0,0.08)'),
+                color: '#ffffff',
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                fontWeight: 900
+              }}>{isStep2Done ? '✓' : '2'}</span>
               <span>🐝 2. Hive Telemetry</span>
-            </div>
-            <div className={`stepper-pill ${activeStep === 3 ? 'active' : ''} ${isStep3Done ? 'done' : ''}`} onClick={() => setActiveStep(3)}>
-              <span>{isStep3Done ? '✓' : '3'}</span>
-              <span>🎵 3. Acoustic & Edge AI</span>
-            </div>
-            <div className={`stepper-pill ${activeStep === 4 ? 'active' : ''} ${isStep4Done ? 'done' : ''}`} onClick={() => setActiveStep(4)}>
-              <span>{isStep4Done ? '✓' : '4'}</span>
+            </button>
+
+            <button 
+              type="button" 
+              className={`stepper-step-btn ${activeStep === 3 ? 'active' : ''} ${isStep3Done ? 'done' : ''}`} 
+              onClick={() => setActiveStep(3)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 18px',
+                borderRadius: '14px',
+                border: activeStep === 3 ? '2px solid #d97706' : (isStep3Done ? '2px solid #22c55e' : '2px solid #e2e8f0'),
+                background: activeStep === 3 ? 'linear-gradient(135deg, #f5b814 0%, #e0a70f 100%)' : (isStep3Done ? '#f0fdf4' : '#ffffff'),
+                color: activeStep === 3 ? '#0f172a' : (isStep3Done ? '#166534' : '#475569'),
+                fontWeight: activeStep === 3 ? 900 : 800,
+                fontSize: '0.88rem',
+                cursor: 'pointer',
+                boxShadow: activeStep === 3 ? '0 6px 20px rgba(245, 184, 20, 0.35)' : 'none',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              <span style={{
+                background: activeStep === 3 ? '#0f172a' : (isStep3Done ? '#22c55e' : 'rgba(0,0,0,0.08)'),
+                color: '#ffffff',
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                fontWeight: 900
+              }}>{isStep3Done ? '✓' : '3'}</span>
+              <span>🎵 3. Acoustic &amp; Edge AI</span>
+            </button>
+
+            <button 
+              type="button" 
+              className={`stepper-step-btn ${activeStep === 4 ? 'active' : ''} ${isStep4Done ? 'done' : ''}`} 
+              onClick={() => setActiveStep(4)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 18px',
+                borderRadius: '14px',
+                border: activeStep === 4 ? '2px solid #d97706' : (isStep4Done ? '2px solid #22c55e' : '2px solid #e2e8f0'),
+                background: activeStep === 4 ? 'linear-gradient(135deg, #f5b814 0%, #e0a70f 100%)' : (isStep4Done ? '#f0fdf4' : '#ffffff'),
+                color: activeStep === 4 ? '#0f172a' : (isStep4Done ? '#166534' : '#475569'),
+                fontWeight: activeStep === 4 ? 900 : 800,
+                fontSize: '0.88rem',
+                cursor: 'pointer',
+                boxShadow: activeStep === 4 ? '0 6px 20px rgba(245, 184, 20, 0.35)' : 'none',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              <span style={{
+                background: activeStep === 4 ? '#0f172a' : (isStep4Done ? '#22c55e' : 'rgba(0,0,0,0.08)'),
+                color: '#ffffff',
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                fontWeight: 900
+              }}>{isStep4Done ? '✓' : '4'}</span>
               <span>📷 4. Photo Evidence</span>
-            </div>
-            <div className={`stepper-pill ${activeStep === 5 ? 'active' : ''}`} onClick={() => setActiveStep(5)}>
-              <span>5</span>
-              <span>⚡ 5. Review & QR Mint</span>
-            </div>
+            </button>
+
+            <button 
+              type="button" 
+              className={`stepper-step-btn ${activeStep === 5 ? 'active' : ''}`} 
+              onClick={() => setActiveStep(5)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 18px',
+                borderRadius: '14px',
+                border: activeStep === 5 ? '2px solid #d97706' : '2px solid #e2e8f0',
+                background: activeStep === 5 ? 'linear-gradient(135deg, #f5b814 0%, #e0a70f 100%)' : '#ffffff',
+                color: activeStep === 5 ? '#0f172a' : '#475569',
+                fontWeight: activeStep === 5 ? 900 : 800,
+                fontSize: '0.88rem',
+                cursor: 'pointer',
+                boxShadow: activeStep === 5 ? '0 6px 20px rgba(245, 184, 20, 0.35)' : 'none',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              <span style={{
+                background: activeStep === 5 ? '#0f172a' : 'rgba(0,0,0,0.08)',
+                color: '#ffffff',
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                fontWeight: 900
+              }}>5</span>
+              <span>⚡ 5. Review &amp; QR Mint</span>
+            </button>
           </div>
         )}
 
@@ -438,9 +605,9 @@ export default function BeekeeperView({ authToken, currentUser }) {
               {/* SECTION 1 */}
               {(viewMode === 'all_sections' || activeStep === 1) && (
                 <div className="glass-section-box" style={{ marginBottom: '20px' }}>
-                  <div className="section-title">
+                  <div className="section-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '8px 16px', background: 'linear-gradient(135deg, rgba(245, 184, 20, 0.18), rgba(255,255,255,0.8))', border: '1.5px solid rgba(245, 184, 20, 0.4)', borderRadius: '14px', marginBottom: '12px', fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>
                     <span>🍯</span>
-                    <span>1. Harvest & Crop Flora Specs</span>
+                    <span>1. Harvest &amp; Crop Flora Specs</span>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
@@ -528,9 +695,9 @@ export default function BeekeeperView({ authToken, currentUser }) {
               {/* SECTION 2 */}
               {(viewMode === 'all_sections' || activeStep === 2) && (
                 <div className="glass-section-box" style={{ marginBottom: '20px' }}>
-                  <div className="section-title">
+                  <div className="section-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '8px 16px', background: 'linear-gradient(135deg, rgba(245, 184, 20, 0.18), rgba(255,255,255,0.8))', border: '1.5px solid rgba(245, 184, 20, 0.4)', borderRadius: '14px', marginBottom: '12px', fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>
                     <span>🐝</span>
-                    <span>2. IoT Microclimate & Hive Sensor Telemetry</span>
+                    <span>2. IoT Microclimate &amp; Hive Sensor Telemetry</span>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
@@ -619,9 +786,9 @@ export default function BeekeeperView({ authToken, currentUser }) {
               {/* SECTION 3 */}
               {(viewMode === 'all_sections' || activeStep === 3) && (
                 <div className="glass-section-box" style={{ marginBottom: '20px' }}>
-                  <div className="section-title">
+                  <div className="section-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '8px 16px', background: 'linear-gradient(135deg, rgba(245, 184, 20, 0.18), rgba(255,255,255,0.8))', border: '1.5px solid rgba(245, 184, 20, 0.4)', borderRadius: '14px', marginBottom: '12px', fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>
                     <span>🎵</span>
-                    <span>3. Acoustic Audio Spectrogram & Edge AI</span>
+                    <span>3. Acoustic Audio Spectrogram &amp; Edge AI</span>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
@@ -673,25 +840,82 @@ export default function BeekeeperView({ authToken, currentUser }) {
               {/* SECTION 4 */}
               {(viewMode === 'all_sections' || activeStep === 4) && (
                 <div className="glass-section-box" style={{ marginBottom: '20px' }}>
-                  <div className="section-title">
+                  <div className="section-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '8px 16px', background: 'linear-gradient(135deg, rgba(245, 184, 20, 0.25), rgba(255,255,255,0.9))', border: '1.5px solid #f5b814', borderRadius: '14px', marginBottom: '12px', fontSize: '1.1rem', fontWeight: 900, color: '#92400e' }}>
                     <span>📷</span>
-                    <span>4. Mandatory Comb Frame Photo Evidence & Geotag</span>
+                    <span>4. Mandatory Comb Frame Photo Evidence &amp; Geotag</span>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
                     <div>
                       <label style={{ fontSize: '0.82rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '4px' }}>
-                        Upload Comb Frame Image *
+                        Capture Comb Frame Image *
                       </label>
-                      <input 
-                        type="file" 
-                        accept="image/*"
-                        className="neo-input"
-                        onChange={handleImageChange}
-                        style={{ padding: '6px' }}
-                      />
+
+                      {/* Live camera viewport */}
+                      {camera.isActive && (
+                        <video
+                          ref={camera.videoRef}
+                          playsInline
+                          muted
+                          style={{ width: '100%', borderRadius: '12px', background: '#000', aspectRatio: '4 / 3', objectFit: 'cover' }}
+                        />
+                      )}
+
+                      {!camera.isActive && !imagePreview && (
+                        <div style={{ width: '100%', aspectRatio: '4 / 3', borderRadius: '12px', background: '#0f172a', color: '#94a3b8', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.8rem' }}>
+                          <span style={{ fontSize: '1.8rem' }}>📷</span>
+                          Camera stream inactive
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+                        {!camera.isActive ? (
+                          <button
+                            type="button"
+                            className="btn-yellow"
+                            onClick={camera.start}
+                            disabled={!camera.isSupported}
+                            style={{ padding: '10px 18px', fontSize: '0.85rem' }}
+                          >
+                            📷 Open Camera
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-yellow"
+                            onClick={handleShutter}
+                            disabled={camera.isCapturing}
+                            style={{ padding: '10px 18px', fontSize: '0.85rem' }}
+                          >
+                            {camera.isCapturing ? 'Capturing...' : '⭘ Capture Frame'}
+                          </button>
+                        )}
+
+                        {camera.isActive && (
+                          <button type="button" className="btn-white" onClick={camera.stop} style={{ padding: '10px 18px', fontSize: '0.85rem' }}>
+                            Cancel
+                          </button>
+                        )}
+
+                        {imagePreview && (
+                          <button type="button" className="btn-white" onClick={handleRetake} style={{ padding: '10px 18px', fontSize: '0.85rem' }}>
+                            ↺ Retake
+                          </button>
+                        )}
+                      </div>
+
+                      {!camera.isSupported && (
+                        <span style={{ fontSize: '0.75rem', color: '#b91c1c', display: 'block', marginTop: '4px', fontWeight: 700 }}>
+                          This browser cannot provide a camera stream. Use a secure (https) origin.
+                        </span>
+                      )}
+                      {camera.error && (
+                        <span style={{ fontSize: '0.75rem', color: '#b91c1c', display: 'block', marginTop: '4px', fontWeight: 700 }}>
+                          {camera.error}
+                        </span>
+                      )}
                       <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block', marginTop: '4px' }}>
-                        GPS Coordinates are automatically attached upon photo upload.
+                        GPS coordinates and a UTC timestamp are injected into the image payload at the moment of capture.
                       </span>
                     </div>
 
@@ -699,8 +923,8 @@ export default function BeekeeperView({ authToken, currentUser }) {
                       <label style={{ fontSize: '0.82rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '4px' }}>
                         Frame Evidence Caption
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         className="neo-input"
                         placeholder="e.g. Sealed honeycomb frame prior to extraction"
                         value={formData.imageCaption}
@@ -710,11 +934,23 @@ export default function BeekeeperView({ authToken, currentUser }) {
                   </div>
 
                   {imagePreview && (
-                    <div style={{ marginTop: '16px', display: 'flex', gap: '16px', alignItems: 'center' }}>
+                    <div style={{ marginTop: '16px', display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                       <img src={imagePreview} alt="Comb Preview" style={{ width: '120px', height: '90px', objectFit: 'cover', borderRadius: '12px', border: '2px solid #f5b814' }} />
-                      <div>
+                      <div style={{ display: 'grid', gap: '2px' }}>
                         <div style={{ fontWeight: 800, color: '#16a34a', fontSize: '0.88rem' }}>✓ Mandatory Comb Photo Geotagged</div>
                         <div style={{ fontSize: '0.78rem', color: '#475569' }}>Location: {geoCoords}</div>
+                        {captureStamp && (
+                          <>
+                            <div style={{ fontSize: '0.78rem', color: '#475569' }}>
+                              UTC captured: <code>{captureStamp.capturedAtUtc}</code>
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: captureStamp.source === 'gps' ? '#166534' : '#b45309', fontWeight: 700 }}>
+                              {captureStamp.source === 'gps'
+                                ? `Fix accuracy ±${Math.round(captureStamp.accuracy || 0)} m`
+                                : `Sensor ${captureStamp.source} - no GPS fix on this frame`}
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
@@ -909,26 +1145,24 @@ export default function BeekeeperView({ authToken, currentUser }) {
                 return (
                   <div 
                     key={b.batchId} 
+                    onClick={() => setModalBatch(b)}
                     style={{
                       background: 'rgba(255, 255, 255, 0.88)',
                       border: isTested ? '2px solid #bbf7d0' : '1px solid rgba(0, 0, 0, 0.1)',
                       padding: '20px',
                       borderRadius: '20px',
                       boxShadow: '0 8px 24px rgba(0,0,0,0.04)',
-                      transition: 'all 0.2s ease'
+                      transition: 'all 0.2s ease',
+                      cursor: 'pointer'
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 800 }}>
-                      <a 
-                        href={`/consumer?batchId=${encodeURIComponent(b.batchId)}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        style={{ color: '#0f172a', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '1.05rem', fontWeight: 900 }}
-                        title="View batch details on public page"
+                      <div 
+                        style={{ color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '1.05rem', fontWeight: 900 }}
                       >
                         <span>{b.batchId}</span>
-                        <span style={{ fontSize: '0.85rem' }}>🔗</span>
-                      </a>
+                        <span style={{ fontSize: '0.85rem' }}>🔍</span>
+                      </div>
 
                       <span style={{
                         fontSize: '0.75rem',
@@ -988,6 +1222,11 @@ export default function BeekeeperView({ authToken, currentUser }) {
           )}
         </div>
       </div>
+
+      <BatchDetailsModal
+        batch={modalBatch}
+        onClose={() => setModalBatch(null)}
+      />
     </main>
   );
 }

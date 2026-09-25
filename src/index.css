@@ -13,7 +13,7 @@
     --green-accent: #22c55e;
     --red-accent: #ef4444;
 
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
 }
 
@@ -35,6 +35,20 @@ body {
     display: flex;
     flex-direction: column;
     -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════════════ GLOBAL APP CONTAINER ═══════════════ */
+.app-container {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 32px 24px 60px;
+    width: 100%;
+}
+
+@media (max-width: 640px) {
+    .app-container {
+        padding: 20px 14px 40px;
+    }
 }
 
 /* ═══════════════ REACT APP HEADER ═══════════════ */
@@ -923,3 +937,36 @@ body {
     0% { outline: 4px solid var(--yellow-accent); box-shadow: 0 0 15px var(--yellow-accent); }
     100% { outline: none; }
 }
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Base button enhancements to ensure buttons look like modern styled buttons */
+button {
+    font-family: var(--font-sans);
+    cursor: pointer;
+    border-radius: 10px;
+    font-weight: 700;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+button:hover {
+    transform: translateY(-1px);
+}
+
+button:active {
+    transform: translateY(1px);
+}
+
+.btn-modal-close:hover {
+    background: rgba(255, 255, 255, 0.3) !important;
+    transform: scale(1.05) !important;
+}
+

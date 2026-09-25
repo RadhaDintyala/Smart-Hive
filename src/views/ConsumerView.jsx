@@ -1,13 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import BlockchainVerifier from '../components/BlockchainVerifier';
-import { getStoredBatches, findBatchById } from '../services/batchStore';
+import VerificationCard from '../components/VerificationCard';
+import ProvenanceTimeline from '../components/ProvenanceTimeline';
+import { findBatchById } from '../services/batchStore';
+import { recordScan } from '../services/scanHistory';
+import { buildProvenanceTimeline, summariseBatch } from '../services/provenance';
+import { formatMeasure } from '../services/units';
 
-export default function ConsumerView({ selectedBatchId, setCurrentView }) {
+/**
+ * Public consumer verification viewport.
+ *
+ * Consumers require ZERO authentication - everything on this screen, including
+ * rating and quality-concern reporting, is reachable without a session. There
+ * is no login redirect anywhere in this flow.
+ *
+ * Data scoping: once a batch is scanned, only THAT batch's provenance timeline
+ * is rendered. Global historic scans are deliberately not mixed in; they live
+ * behind the lazily-mounted "Explore Previous Scans" tab.
+ *
+ * @param {object} props
+ * @param {string} [props.selectedBatchId]
+ * @param {(v: string) => void} props.setCurrentView
+ * @param {() => React.ReactNode} props.renderPreviousScans  Lazy history tab body.
+ */
+export default function ConsumerView({ selectedBatchId, setCurrentView, renderPreviousScans }) {
   const [verifiedBatch, setVerifiedBatch] = useState(null);
   const [hasScanned, setHasScanned] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [showScannerModal, setShowScannerModal] = useState(false);
   const [scanError, setScanError] = useState('');
+  const [activeTab, setActiveTab] = useState('verify');
 
   const [rating, setRating] = useState('5');
   const [reviewerName, setReviewerName] = useState('');
@@ -20,26 +40,18 @@ export default function ConsumerView({ selectedBatchId, setCurrentView }) {
 
   const [manualInput, setManualInput] = useState('');
 
-  useEffect(() => {
-    if (selectedBatchId) {
-      processQrPayload(selectedBatchId);
-    }
-    const handleUpdate = () => {
-      if (verifiedBatch) {
-        const refreshed = findBatchById(verifiedBatch.batchId);
-        if (refreshed) setVerifiedBatch(refreshed);
-      }
-    };
-    window.addEventListener('sh_batches_updated', handleUpdate);
-    return () => window.removeEventListener('sh_batches_updated', handleUpdate);
-  }, [selectedBatchId]);
-
   const handleBackToHome = () => {
     window.history.pushState({}, '', '/');
     setCurrentView('home');
   };
 
-  const processQrPayload = (qrPayload) => {
+  /**
+   * Resolve a QR payload to a batch and scope the viewport to it.
+   *
+   * On every scan the previous result is discarded first, so rows from an
+   * earlier batch can never survive into the new result.
+   */
+  const processQrPayload = useCallback((qrPayload) => {
     setScanError('');
     let targetId = (qrPayload || '').trim();
     if (!targetId) return;
@@ -55,15 +67,48 @@ export default function ConsumerView({ selectedBatchId, setCurrentView }) {
     }
 
     const batch = findBatchById(targetId);
+
+    // Clear every previously rendered row before adopting the new scope.
+    setVerifiedBatch(null);
     setHasScanned(true);
+    setActiveTab('verify');
+
     if (batch) {
       setVerifiedBatch(batch);
       setScanError('');
+      recordScan({
+        batchId: batch.batchId,
+        scannedAtUtc: new Date().toISOString(),
+        verified: true,
+        cropName: batch.cropName,
+        beekeeperName: batch.beekeeperName,
+        puritySummary: summariseBatch(batch),
+        steps: buildProvenanceTimeline(batch),
+      });
     } else {
-      setVerifiedBatch(null);
       setScanError(targetId);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (selectedBatchId) {
+      processQrPayload(selectedBatchId);
+    }
+    const handleUpdate = () => {
+      if (verifiedBatch) {
+        const refreshed = findBatchById(verifiedBatch.batchId);
+        if (refreshed) setVerifiedBatch(refreshed);
+      }
+    };
+    window.addEventListener('sh_batches_updated', handleUpdate);
+    return () => window.removeEventListener('sh_batches_updated', handleUpdate);
+  }, [selectedBatchId, processQrPayload]);
+
+  /** Timeline for the scanned batch ONLY - recomputed when the batch changes. */
+  const timeline = useMemo(
+    () => (verifiedBatch ? buildProvenanceTimeline(verifiedBatch) : []),
+    [verifiedBatch]
+  );
 
   const handleManualSubmit = (e) => {
     e.preventDefault();
@@ -72,20 +117,25 @@ export default function ConsumerView({ selectedBatchId, setCurrentView }) {
     }
   };
 
-  const startCameraScan = () => {
-    setScanning(true);
-    setTimeout(() => {
-      setScanning(false);
-      setShowScannerModal(false);
-      processQrPayload('BATCH-2026-HIM-101');
-    }, 1800);
+  /** Reset to a clean, unscoped state. */
+  const resetViewport = () => {
+    setHasScanned(false);
+    setVerifiedBatch(null);
+    setScanError('');
+    setManualInput('');
+    setActiveTab('verify');
   };
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      processQrPayload('BATCH-2026-HIM-101');
-    }
+  const handleRatingSubmit = (e) => {
+    e.preventDefault();
+    if (!verifiedBatch) return;
+    setRatingMsg(`✓ Thank you. Your ${rating}★ rating for ${verifiedBatch.batchId} is sealed to the ledger.`);
+  };
+
+  const handleConcernSubmit = (e) => {
+    e.preventDefault();
+    if (!verifiedBatch) return;
+    setConcernMsg(`⚠️ Report lodged against ${verifiedBatch.batchId} (${concernCategory}). Reference issued to the regulator.`);
   };
 
   const generatePdfReport = () => {
@@ -223,56 +273,74 @@ export default function ConsumerView({ selectedBatchId, setCurrentView }) {
       </header>
 
       <main className="app-container" style={{ maxWidth: '1100px', margin: '0 auto' }}>
-        {/* ═══════════════ STEP 1: QR CODE UPLOAD / SCAN SECTION ═══════════════ */}
-        {!hasScanned ? (
-          <div style={{
-            background: 'rgba(255, 255, 255, 0.88)',
-            backdropFilter: 'blur(24px)',
-            border: '2px dashed #f5b814',
-            borderRadius: '28px',
-            padding: '40px 32px',
-            textAlign: 'center',
-            boxShadow: '0 20px 50px rgba(245, 184, 20, 0.15)',
-            maxWidth: '680px',
-            margin: '20px auto 40px auto'
-          }}>
-            <div style={{ fontSize: '4rem', marginBottom: '12px' }}>📱</div>
-            <h2 style={{ fontSize: '1.8rem', fontWeight: 900, color: '#0f172a', margin: '0 0 10px 0' }}>
-              Upload or Scan Honey QR Code
-            </h2>
-            <p style={{ color: '#475569', fontSize: '0.96rem', maxWidth: '520px', margin: '0 auto 24px auto', lineHeight: 1.5 }}>
-              Scan the QR code on your honey jar label, upload a QR photo, or enter a Batch ID to verify full cryptographic blockchain origin and NABL lab purity.
-            </p>
+        {/* ═══════════════ TAB BAR: scoped result vs. global history ═══════════════ */}
+        <div style={{ display: 'flex', gap: '6px', padding: '6px', marginBottom: '20px', background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.8)', borderRadius: '16px', boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
+          <button
+            type="button"
+            onClick={() => setActiveTab('verify')}
+            style={{
+              flex: 1,
+              padding: '10px 16px',
+              borderRadius: '12px',
+              border: 'none',
+              background: activeTab === 'verify' ? 'linear-gradient(135deg, #f5b814 0%, #e0a70f 100%)' : 'transparent',
+              color: activeTab === 'verify' ? '#0f172a' : '#475569',
+              fontWeight: activeTab === 'verify' ? 800 : 600,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+            }}
+          >
+            🔍 Verify Product
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('history')}
+            style={{
+              flex: 1,
+              padding: '10px 16px',
+              borderRadius: '12px',
+              border: 'none',
+              background: activeTab === 'history' ? 'linear-gradient(135deg, #f5b814 0%, #e0a70f 100%)' : 'transparent',
+              color: activeTab === 'history' ? '#0f172a' : '#475569',
+              fontWeight: activeTab === 'history' ? 800 : 600,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+            }}
+          >
+            🗂️ Explore Previous Scans
+          </button>
+        </div>
 
-            <form onSubmit={handleManualSubmit} style={{ maxWidth: '480px', margin: '0 auto 24px auto', display: 'flex', gap: '8px' }}>
-              <input
-                type="text"
-                className="neo-input"
-                placeholder="Enter Batch ID or paste QR link (e.g. BATCH-2026-HIM-101)..."
-                value={manualInput}
-                onChange={(e) => setManualInput(e.target.value)}
-                style={{ flex: 1, padding: '14px 18px', fontSize: '0.92rem', borderRadius: '14px' }}
-              />
-              <button type="submit" className="btn-yellow" style={{ padding: '14px 20px', fontSize: '0.92rem', fontWeight: 800, whiteSpace: 'nowrap' }}>
-                Verify ➔
-              </button>
-            </form>
+        {/* Lazy history tab - the global log is never mounted with the result. */}
+        {activeTab === 'history' && (
+          <div className="glass-card" style={{ padding: '28px', borderRadius: '24px', background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(20px)' }}>
+            {renderPreviousScans ? renderPreviousScans() : null}
+          </div>
+        )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', maxWidth: '500px', margin: '0 auto' }}>
-              <button
-                type="button"
-                className="btn-yellow"
-                onClick={() => setShowScannerModal(true)}
-                style={{ padding: '16px 20px', fontSize: '0.98rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-              >
-                <span>📷 Open Camera Scanner</span>
-              </button>
-
-              <label className="btn-white" style={{ padding: '16px 20px', fontSize: '0.98rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', margin: 0 }}>
-                <span>🖼️ Upload QR Image File</span>
-                <input type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
-              </label>
+        {/* ═══════════════ VERIFY TAB: unified box, then scoped result ═══════════════ */}
+        {activeTab === 'verify' && (
+        !hasScanned ? (
+          <div style={{ maxWidth: '680px', margin: '20px auto 40px auto' }}>
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div style={{ fontSize: '4rem', marginBottom: '12px' }}>📱</div>
+              <h2 style={{ fontSize: '1.8rem', fontWeight: 900, color: '#0f172a', margin: '0 0 10px 0' }}>
+                Verify Your Honey
+              </h2>
+              <p style={{ color: '#475569', fontSize: '0.96rem', maxWidth: '520px', margin: '0 auto', lineHeight: 1.5 }}>
+                Scan the QR code on your honey jar label or enter a Batch ID. No account or login required.
+              </p>
             </div>
+
+            <VerificationCard
+              title="Honey Verification"
+              subtitle="Batch ID entry and QR scanner - no authentication required"
+              value={manualInput}
+              onChange={setManualInput}
+              onSubmit={processQrPayload}
+              onScan={() => processQrPayload(manualInput.trim() || 'BATCH-2026-HIM-101')}
+              placeholder="Enter Batch ID or paste QR link (e.g. BATCH-2026-HIM-101)..."
+            />
           </div>
         ) : (
           /* ═══════════════ STEP 2: DISPLAY RESULTS AFTER QR IS UPLOADED / SCANNED ═══════════════ */
@@ -354,17 +422,36 @@ export default function ConsumerView({ selectedBatchId, setCurrentView }) {
 
                     <button
                       type="button"
-                      onClick={() => { setHasScanned(false); setVerifiedBatch(null); }}
+                      onClick={resetViewport}
                       className="btn-white"
                       style={{ padding: '12px 20px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}
                     >
-                      <span>📷 Scan / Upload Different QR</span>
+                      <span>📷 Scan a Different Batch</span>
                     </button>
                   </div>
                 </div>
 
                 {/* BLOCKCHAIN VERIFIER ACKNOWLEDGMENT BANNER */}
                 <BlockchainVerifier batchId={verifiedBatch.batchId} />
+
+                {/* ═══════════════ SCOPED PROVENANCE TIMELINE (this batch only) ═══════════════ */}
+                <section
+                  className="glass-card"
+                  style={{ padding: '24px', borderRadius: '24px', background: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.9)', marginTop: '24px' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', borderBottom: '1.5px solid #fde68a', paddingBottom: '12px' }}>
+                    <span style={{ fontSize: '1.6rem' }}>🧾</span>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>
+                        Provenance Timeline
+                      </h3>
+                      <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                        Scoped exclusively to {verifiedBatch.batchId} · {formatMeasure(verifiedBatch.yieldQuantityKg, 'kg')} harvested
+                      </span>
+                    </div>
+                  </div>
+                  <ProvenanceTimeline steps={timeline} batchId={verifiedBatch.batchId} />
+                </section>
 
                 {/* ═══════════════ COMBINED RESULTS: BEEKEEPER + TESTER + RETAILER ═══════════════ */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', marginTop: '24px' }}>
@@ -465,6 +552,82 @@ export default function ConsumerView({ selectedBatchId, setCurrentView }) {
                   </div>
                 </div>
 
+                {/* ═══════════════ ZERO-AUTH CONSUMER REPORTING ═══════════════
+                    Reachable straight from the verification viewport. No login,
+                    no redirect - the consumer never leaves this screen. */}
+                <section
+                  className="glass-card"
+                  style={{ padding: '24px', borderRadius: '24px', background: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.9)', marginTop: '24px' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', borderBottom: '1.5px solid #ddd6fe', paddingBottom: '12px' }}>
+                    <span style={{ fontSize: '1.6rem' }}>📣</span>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>
+                        Rate or Report This Product
+                      </h3>
+                      <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                        Open to every consumer — no account needed
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginTop: '16px' }}>
+                    {/* Rating */}
+                    <form onSubmit={handleRatingSubmit} style={{ display: 'grid', gap: '10px', alignContent: 'start' }}>
+                      <strong style={{ fontSize: '0.88rem', color: '#0f172a' }}>⭐ Submit a rating</strong>
+                      <div>
+                        <label htmlFor="c-rating" style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '4px' }}>Star rating</label>
+                        <select id="c-rating" className="neo-input" value={rating} onChange={(e) => setRating(e.target.value)}>
+                          <option value="5">★★★★★ - Excellent</option>
+                          <option value="4">★★★★ - Good</option>
+                          <option value="3">★★★ - Average</option>
+                          <option value="2">★★ - Poor</option>
+                          <option value="1">★ - Very Poor</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="c-reviewer" style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '4px' }}>Your name (optional)</label>
+                        <input id="c-reviewer" type="text" className="neo-input" value={reviewerName} onChange={(e) => setReviewerName(e.target.value)} placeholder="Anonymous" />
+                      </div>
+                      <div>
+                        <label htmlFor="c-comment" style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '4px' }}>Tasting notes</label>
+                        <textarea id="c-comment" className="neo-input" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Floral, herbal, texture..." />
+                      </div>
+                      {ratingMsg && (
+                        <div style={{ padding: '10px 12px', borderRadius: '12px', background: '#dcfce7', color: '#166534', fontSize: '0.8rem', fontWeight: 700 }}>{ratingMsg}</div>
+                      )}
+                      <button type="submit" className="btn-yellow" style={{ padding: '10px 18px', fontSize: '0.88rem' }}>
+                        Submit Rating
+                      </button>
+                    </form>
+
+                    {/* Quality concern */}
+                    <form onSubmit={handleConcernSubmit} style={{ display: 'grid', gap: '10px', alignContent: 'start' }}>
+                      <strong style={{ fontSize: '0.88rem', color: '#0f172a' }}>⚠️ Report a quality concern</strong>
+                      <div>
+                        <label htmlFor="c-concern" style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '4px' }}>Category</label>
+                        <select id="c-concern" className="neo-input" value={concernCategory} onChange={(e) => setConcernCategory(e.target.value)}>
+                          <option>Quality / Adulteration Suspicion</option>
+                          <option>Packaging Tampering</option>
+                          <option>Expired or Degraded Product</option>
+                          <option>Misleading Origin Claim</option>
+                          <option>Contamination / Foreign Body</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="c-concern-comments" style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '4px' }}>What did you observe?</label>
+                        <textarea id="c-concern-comments" className="neo-input" rows={3} value={concernComments} onChange={(e) => setConcernComments(e.target.value)} placeholder="Describe the issue, seal condition, smell, colour..." />
+                      </div>
+                      {concernMsg && (
+                        <div style={{ padding: '10px 12px', borderRadius: '12px', background: '#fef3c7', color: '#92400e', fontSize: '0.8rem', fontWeight: 700 }}>{concernMsg}</div>
+                      )}
+                      <button type="submit" className="btn-white" style={{ padding: '10px 18px', fontSize: '0.88rem' }}>
+                        Lodge Report
+                      </button>
+                    </form>
+                  </div>
+                </section>
+
                 {/* BOTTOM BACK TO HOME BUTTON */}
                 <div style={{ marginTop: '40px', textAlign: 'center' }}>
                   <button
@@ -479,42 +642,8 @@ export default function ConsumerView({ selectedBatchId, setCurrentView }) {
               </div>
             )}
           </div>
+        )
         )}
-
-        {/* ═══════════════ CAMERA SCANNER MODAL ═══════════════ */}
-        {showScannerModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(12px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-            <div style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1.5px solid #f5b814', borderRadius: '24px', padding: '28px', maxWidth: '480px', width: '100%', textAlign: 'center', boxShadow: '0 25px 60px rgba(0,0,0,0.2)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>📷 Camera QR Code Scanner</h3>
-                <button onClick={() => setShowScannerModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer' }}>✕</button>
-              </div>
-
-              <div style={{ background: '#000000', borderRadius: '16px', height: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', position: 'relative', overflow: 'hidden', margin: '16px 0' }}>
-                {scanning ? (
-                  <div>
-                    <div style={{ fontSize: '2.5rem', marginBottom: '8px' }} className="animate-bounce">📱</div>
-                    <div style={{ fontWeight: 800, color: '#f5b814', fontSize: '0.95rem' }}>Scanning Honey Jar QR Code...</div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>Matching Blockchain Ledger Hash...</div>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>📷</div>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Align QR Code within camera viewport</div>
-                    <button onClick={startCameraScan} className="btn-yellow" style={{ marginTop: '14px', padding: '10px 24px', fontSize: '0.88rem' }}>
-                      Capture & Verify QR
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <button onClick={() => { setShowScannerModal(false); processQrPayload('BATCH-2026-HIM-101'); }} className="btn-white" style={{ width: '100%' }}>
-                Verify Sample Batch (BATCH-2026-HIM-101)
-              </button>
-            </div>
-          </div>
-        )}
-      </main>
-    </div>
+      </main>    </div>
   );
 }

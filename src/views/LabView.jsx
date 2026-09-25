@@ -1,10 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { getStoredBatches, updateLabResults } from '../services/batchStore';
+import { formatMeasure } from '../services/units';
 
+/**
+ * Laboratory split-pane interface.
+ *
+ * Layout is a fixed 30 / 70 split: the left column is the master list of
+ * sample names, the right column is the inspection workspace.
+ *
+ * Workflow is strictly sequential - selecting a sample always loads Phase 1
+ * (farmer profile, harvest metrics, geotagged proof of origin). Phase 2 (the
+ * chemical analysis form) is reachable only through an explicit button, never
+ * by default.
+ *
+ * Immutability: once a certificate transaction is executed, `isSubmitted` locks
+ * every input in Phase 2 so a sealed result can never be overwritten in place.
+ */
 export default function LabView({ authToken }) {
   const [batches, setBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState(null);
-  const [activeStep, setActiveStep] = useState(1); // 1 = Inspect Farmer Details, 2 = Enter Test Results
+  const [activeStep, setActiveStep] = useState(1); // 1 = Phase 1 inspect, 2 = Phase 2 test form
+  const [isSubmitted, setIsSubmitted] = useState(false);
   const [formData, setFormData] = useState({
     purityPercentage: '99.8',
     moisturePercentage: '17.1',
@@ -37,10 +53,17 @@ export default function LabView({ authToken }) {
     }
   };
 
+  /**
+   * Select a sample. Always resets to Phase 1 and re-derives `isSubmitted` from
+   * whether the batch already carries a sealed certificate - a re-opened
+   * certified sample must not present an editable form.
+   */
   const handleSelectBatch = (batch) => {
     setSelectedBatch(batch);
-    setActiveStep(1); // Reset to Step 1 Farmer Details first
+    setActiveStep(1);
     setMsg('');
+    setIsSubmitted(Boolean(batch.labTestResults));
+
     if (batch.labTestResults) {
       setFormData({
         purityPercentage: batch.labTestResults.purityPercentage || '99.8',
@@ -66,7 +89,7 @@ export default function LabView({ authToken }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!selectedBatch) return;
+    if (!selectedBatch || isSubmitted) return;
 
     setLoading(true);
     setMsg('');
@@ -78,6 +101,8 @@ export default function LabView({ authToken }) {
       if (updatedBatch) setSelectedBatch(updatedBatch);
 
       setLoading(false);
+      // Seal the form: no further edits can override the ledger record.
+      setIsSubmitted(true);
       setMsg('✓ NABL Laboratory Certificate & Feedback Issued & Sealed to Ledger Successfully!');
     }, 600);
   };
@@ -95,7 +120,13 @@ export default function LabView({ authToken }) {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
+      {/* 30 / 70 SPLIT PANE: master list | inspection workspace */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(240px, 30%) minmax(0, 70%)',
+        gap: '24px',
+        alignItems: 'start'
+      }}>
         {/* LEFT COLUMN: PENDING BATCHES QUEUE FROM BEEKEEPER */}
         <div className="glass-card" style={{ padding: '24px', borderRadius: '24px', background: 'rgba(255, 255, 255, 0.85)', backdropFilter: 'blur(20px)' }}>
           <h3 style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0f172a', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -167,7 +198,7 @@ export default function LabView({ authToken }) {
                 </h2>
               </div>
 
-              {/* STEP 1 / 2 NAVIGATION TABS */}
+              {/* PHASE 1 / PHASE 2 NAVIGATION */}
               <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
                 <button
                   type="button"
@@ -184,7 +215,7 @@ export default function LabView({ authToken }) {
                     cursor: 'pointer'
                   }}
                 >
-                  1. Inspect Beekeeper Data
+                  Phase 1 · Inspect Origin
                 </button>
                 <button
                   type="button"
@@ -201,7 +232,7 @@ export default function LabView({ authToken }) {
                     cursor: 'pointer'
                   }}
                 >
-                  2. Input Lab Results
+                  Phase 2 · Chemical Analysis {isSubmitted && '🔒'}
                 </button>
               </div>
 
@@ -214,7 +245,7 @@ export default function LabView({ authToken }) {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.85rem' }}>
                     <div><strong>Floral Source:</strong> {selectedBatch.floralSource}</div>
                     <div><strong>Harvest Date:</strong> {selectedBatch.harvestStartDate}</div>
-                    <div><strong>Yield:</strong> {selectedBatch.yieldQuantityKg} kg</div>
+                    <div><strong>Yield:</strong> {formatMeasure(selectedBatch.yieldQuantityKg, 'kg')}</div>
                     <div><strong>Geotag:</strong> {selectedBatch.geoCoords}</div>
                     <div><strong>IoT Hive Temp/Humidity:</strong> {selectedBatch.temperature}°C / {selectedBatch.humidity}%</div>
                     <div><strong>Acoustic Spectrogram:</strong> {selectedBatch.audioFilename || 'spectrogram.wav'} ({selectedBatch.audioFreq || '225'} Hz)</div>
@@ -248,12 +279,18 @@ export default function LabView({ authToken }) {
                     className="btn-yellow"
                     style={{ width: '100%', marginTop: '20px', padding: '12px', fontSize: '0.9rem' }}
                   >
-                    <span>Proceed to Enter Lab Test Parameters ➔</span>
+                    <span>{isSubmitted ? '🔒 View Sealed Certificate ➔' : 'Proceed to Enter Lab Test Parameters ➔'}</span>
                   </button>
                 </div>
               ) : (
                 /* STEP 2: INPUT LAB TEST PARAMETERS & SUBMIT VERIFICATION */
                 <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '14px' }}>
+                  {isSubmitted && (
+                    <div style={{ padding: '12px', borderRadius: '12px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', fontSize: '0.85rem', fontWeight: 700 }}>
+                      🔒 Certificate already sealed to the ledger for this batch. These results are immutable and shown for audit only.
+                    </div>
+                  )}
+
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div>
                       <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '4px' }}>
@@ -264,6 +301,7 @@ export default function LabView({ authToken }) {
                         className="neo-input"
                         value={formData.purityPercentage}
                         onChange={e => setFormData({ ...formData, purityPercentage: e.target.value })}
+                        disabled={isSubmitted}
                         required
                       />
                     </div>
@@ -276,6 +314,7 @@ export default function LabView({ authToken }) {
                         className="neo-input"
                         value={formData.moisturePercentage}
                         onChange={e => setFormData({ ...formData, moisturePercentage: e.target.value })}
+                        disabled={isSubmitted}
                         required
                       />
                     </div>
@@ -291,6 +330,7 @@ export default function LabView({ authToken }) {
                         className="neo-input"
                         value={formData.hmfMgKg}
                         onChange={e => setFormData({ ...formData, hmfMgKg: e.target.value })}
+                        disabled={isSubmitted}
                         required
                       />
                     </div>
@@ -303,6 +343,7 @@ export default function LabView({ authToken }) {
                         className="neo-input"
                         value={formData.antibioticResidues}
                         onChange={e => setFormData({ ...formData, antibioticResidues: e.target.value })}
+                        disabled={isSubmitted}
                         required
                       />
                     </div>
@@ -317,6 +358,7 @@ export default function LabView({ authToken }) {
                       className="neo-input"
                       value={formData.pollenCount}
                       onChange={e => setFormData({ ...formData, pollenCount: e.target.value })}
+                      disabled={isSubmitted}
                       required
                     />
                   </div>
@@ -330,6 +372,7 @@ export default function LabView({ authToken }) {
                       rows={3}
                       value={formData.feedback}
                       onChange={e => setFormData({ ...formData, feedback: e.target.value })}
+                      disabled={isSubmitted}
                       required
                     />
                   </div>
@@ -342,6 +385,7 @@ export default function LabView({ authToken }) {
                       className="neo-input"
                       value={formData.status}
                       onChange={e => setFormData({ ...formData, status: e.target.value })}
+                      disabled={isSubmitted}
                     >
                       <option value="PASS">✓ PASS - Certify Grade A Raw Honey</option>
                       <option value="REJECT">❌ REJECT - Adulteration or High Moisture</option>
@@ -354,14 +398,20 @@ export default function LabView({ authToken }) {
                     </div>
                   )}
 
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="btn-yellow"
-                    style={{ padding: '14px', fontSize: '1rem', fontWeight: 800, marginTop: '8px' }}
-                  >
-                    <span>{loading ? 'Sealing Certificate to Ledger...' : '📜 Issue Lab Certificate & Verify Batch'}</span>
-                  </button>
+                  {isSubmitted ? (
+                    <div style={{ marginTop: '8px', padding: '14px', textAlign: 'center', borderRadius: '12px', background: '#f1f5f9', border: '1px dashed #cbd5e1', color: '#64748b', fontSize: '0.88rem', fontWeight: 800 }}>
+                      ✓ Certificate Sealed — Record Locked
+                    </div>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="btn-yellow"
+                      style={{ padding: '14px', fontSize: '1rem', fontWeight: 800, marginTop: '8px' }}
+                    >
+                      <span>{loading ? 'Sealing Certificate to Ledger...' : '📜 Issue Lab Certificate & Verify Batch'}</span>
+                    </button>
+                  )}
                 </form>
               )}
             </div>

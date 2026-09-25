@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getStoredBatches, addRetailerLog } from '../services/batchStore';
+import TransitPipeline from '../components/TransitPipeline';
+import BatchDetailsModal from '../components/BatchDetailsModal';
+import { formatMeasure, jarsToVolume, formatMeasureOrFallback } from '../services/units';
 
 export default function RetailerView({ authToken }) {
   const [batches, setBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState(null);
+  const [modalBatch, setModalBatch] = useState(null);
   const [activeTab, setActiveTab] = useState('inventory'); // 'inventory', 'audit_form', 'logs'
   const [stockQty, setStockQty] = useState('50');
   const [remarks, setRemarks] = useState('QR scanned & cryptographic authenticity verified upon store receipt.');
@@ -59,7 +63,13 @@ export default function RetailerView({ authToken }) {
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
       temp: '18.4°C',
       stockQuantity: stockQty,
-      storeRemarks: remarks
+      storeRemarks: remarks,
+      // Structured units + transit state so the logistics board never has to
+      // guess a bare number or a status.
+      measure: jarsToVolume(stockQty),
+      transitStatus: 'delivered',
+      destination: 'Organic Hive Superstore (Vasant Kunj)',
+      farmOriginLabel: `${selectedBatch.beekeeperName || selectedBatch.floralSource} • ${selectedBatch.geoCoords || 'geotag unrecorded'}`
     };
 
     setTimeout(() => {
@@ -74,6 +84,33 @@ export default function RetailerView({ authToken }) {
   };
 
   const allLogs = batches.flatMap(b => (b.retailerLogs || []).map(log => ({ ...log, batchId: b.batchId })));
+
+  /**
+   * Derive the logistics board from the ledger. A batch with no store receipt
+   * is still a shipment - it is in transit. Once a receipt exists, the receipt's
+   * recorded transit status wins; older receipts fall back to `delivered` since
+   * a logged receipt means the goods physically arrived.
+   *
+   * @type {import('../services/types').Shipment[]}
+   */
+  const shipments = useMemo(() => batches.map((batch) => {
+    const latestLog = (batch.retailerLogs || [])[0];
+    // Pre-receipt batches are bulk shipments measured in mass; once a store
+    // receipt exists the jar count converts to a volume.
+    const measure = latestLog
+      ? (latestLog.measure || jarsToVolume(latestLog.stockQuantity))
+      : { value: Number(batch.yieldQuantityKg) || 0, unit: 'kg' };
+
+    return {
+      batchId: batch.batchId,
+      farmOriginLabel: (latestLog && latestLog.farmOriginLabel) || batch.beekeeperName || batch.floralSource,
+      measure,
+      status: (latestLog && latestLog.transitStatus) || (latestLog ? 'delivered' : 'in_transit'),
+      destination: (latestLog && latestLog.destination) || 'Organic Hive Superstore (Vasant Kunj)',
+      eta: (latestLog && latestLog.eta) || (latestLog ? undefined : 'Awaiting store intake'),
+      note: latestLog ? latestLog.storeRemarks : `${batch.cropName} dispatched from ${batch.hiveId || 'apiary'}`,
+    };
+  }), [batches]);
 
   return (
     <main className="app-container" style={{ paddingBottom: '50px' }}>
@@ -111,6 +148,24 @@ export default function RetailerView({ authToken }) {
               }}
             >
               📦 Verified Batches ({batches.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('pipeline')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '12px',
+                border: 'none',
+                background: activeTab === 'pipeline' ? 'linear-gradient(135deg, #f5b814 0%, #e0a70f 100%)' : 'transparent',
+                fontWeight: activeTab === 'pipeline' ? 800 : 600,
+                fontSize: '0.85rem',
+                color: activeTab === 'pipeline' ? '#0f172a' : '#475569',
+                boxShadow: activeTab === 'pipeline' ? '0 4px 14px rgba(245, 184, 20, 0.3)' : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              🚚 Transit Pipeline
             </button>
             <button
               type="button"
@@ -201,7 +256,7 @@ export default function RetailerView({ authToken }) {
               return (
                 <div
                   key={batch.batchId}
-                  onClick={() => setSelectedBatch(batch)}
+                  onClick={() => { setSelectedBatch(batch); setModalBatch(batch); }}
                   className="glass-card"
                   style={{
                     padding: '24px',
@@ -232,9 +287,13 @@ export default function RetailerView({ authToken }) {
                     {batch.cropName}
                   </div>
 
-                  <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '12px' }}>
-                    Origin: {batch.floralSource} • Geotag: {batch.geoCoords}
-                  </div>
+                    <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '4px' }}>
+                      Origin: {batch.floralSource} • Geotag: {batch.geoCoords}
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '12px' }}>
+                      Lineage: harvest {formatMeasure(batch.yieldQuantityKg, 'kg')}
+                    </div>
+
 
                   {/* 📌 RETAILER MATCHING BATCH QR CODE TAG */}
                   <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
@@ -245,7 +304,7 @@ export default function RetailerView({ authToken }) {
                     />
                     <div>
                       <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0f172a' }}>Verified QR Tag</div>
-                      <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Scanned at store intake</div>
+                      <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Click card to view details modal</div>
                     </div>
                   </div>
 
@@ -259,7 +318,7 @@ export default function RetailerView({ authToken }) {
                   <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Store Receipts: {batch.retailerLogs ? batch.retailerLogs.length : 0} Logged</span>
                   <button
                     type="button"
-                    onClick={() => { setSelectedBatch(batch); setActiveTab('audit_form'); }}
+                    onClick={(e) => { e.stopPropagation(); setSelectedBatch(batch); setActiveTab('audit_form'); }}
                     className="btn-yellow"
                     style={{ padding: '6px 14px', fontSize: '0.78rem' }}
                   >
@@ -272,6 +331,19 @@ export default function RetailerView({ authToken }) {
         </div>
       </div>
     )}
+
+      {/* TAB: TRANSIT PIPELINE (3 FIXED COLUMNS) */}
+      {activeTab === 'pipeline' && (
+        <div className="glass-card" style={{ padding: '28px', borderRadius: '24px', background: 'rgba(255, 255, 255, 0.88)', backdropFilter: 'blur(20px)' }}>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 900, color: '#0f172a', margin: '0 0 6px 0' }}>
+            🚚 Shipment Transit Pipeline
+          </h2>
+          <p style={{ color: '#64748b', fontSize: '0.88rem', margin: '0 0 20px 0' }}>
+            Every batch on the ledger appears in exactly one column. Quantities always carry an explicit unit.
+          </p>
+          <TransitPipeline shipments={shipments} />
+        </div>
+      )}
 
       {/* TAB 2: LOG STORE AUDIT FORM */}
       {activeTab === 'audit_form' && (
@@ -316,6 +388,9 @@ export default function RetailerView({ authToken }) {
                   onChange={e => setStockQty(e.target.value)}
                   required
                 />
+                <span style={{ fontSize: '0.74rem', color: '#64748b', display: 'block', marginTop: '4px', fontWeight: 700 }}>
+                  = {formatMeasure(jarsToVolume(stockQty).value, 'ml')} total (nominal 750 ml per jar)
+                </span>
               </div>
               <div>
                 <label style={{ fontSize: '0.82rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '6px' }}>
@@ -381,7 +456,14 @@ export default function RetailerView({ authToken }) {
                       Batch {log.batchId} • {log.storeName}
                     </div>
                     <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '2px' }}>
-                      Receipt Date: {log.timestamp} • Stock Qty: {log.stockQuantity} Jars
+                      Receipt Date: {log.timestamp} • Stock Qty:{' '}
+                      <strong style={{ color: '#0f172a' }}>
+                        {formatMeasureOrFallback(
+                          log.measure || jarsToVolume(log.stockQuantity),
+                          `${log.stockQuantity} jars`
+                        )}
+                      </strong>
+                      {log.measure ? '' : ` (${formatMeasure(log.stockQuantity)} jars)`}
                     </div>
                     <div style={{ fontSize: '0.82rem', color: '#334155', fontStyle: 'italic', marginTop: '4px' }}>
                       "{log.storeRemarks}"
@@ -396,6 +478,14 @@ export default function RetailerView({ authToken }) {
           )}
         </div>
       )}
+
+      {/* Floating Batch Details Modal Dialog */}
+      <BatchDetailsModal
+        batch={modalBatch}
+        onClose={() => setModalBatch(null)}
+        onAction={(b) => { setSelectedBatch(b); setActiveTab('audit_form'); }}
+        actionLabel="Log Audit Receipt"
+      />
     </main>
   );
 }

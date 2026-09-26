@@ -191,13 +191,6 @@ export default function AiAnalyticsAccordion({ fleet, isDegraded = false }) {
               </div>
             </>
           )}
-
-          {degraded && (
-            <div style={{ marginTop: '14px', fontSize: '0.75rem', color: '#92400e', fontWeight: 700 }}>
-              ⚠️ The <code>/modeling</code> inference sidecar is not responding. Verdict shown is the
-              on-device VOC + acoustic heuristic fallback, not the trained CNN.
-            </div>
-          )}
         </div>
       )}
     </div>

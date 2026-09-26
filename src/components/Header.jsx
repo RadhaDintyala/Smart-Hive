@@ -19,20 +19,22 @@ export default function Header({ currentView, setCurrentView, currentUser, onLog
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
         {/* Sidebar trigger is global - previously suppressed on the public
             landing view, which left the root route with no navigation. */}
-        <button className="hamburger-btn-react" onClick={toggleSidebar} title="Open Sidebar Navigation">
-          ☰ Menu
-        </button>
+        {currentView !== 'home' && (
+          <button className="hamburger-btn-react" onClick={toggleSidebar} title="Open Sidebar Navigation">
+            ☰ Menu
+          </button>
+        )}
         <div className="brand-title" onClick={navigateToHome} style={{ cursor: 'pointer' }}>
           <span>Smart Hive</span>
         </div>
       </div>
 
       {/* Right side Action & Auth buttons */}
-      <div className="header-right-btns" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div className="header-right-btns" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px', flexWrap: 'nowrap' }}>
         <button 
           className="btn-white" 
           onClick={() => { window.history.pushState({}, '', '/explore'); setCurrentView('explore'); }}
-          style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 700, margin: 0 }}
+          style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 800, margin: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}
         >
           📖 Explore Platform
         </button>
@@ -46,11 +48,15 @@ export default function Header({ currentView, setCurrentView, currentUser, onLog
                 window.history.pushState({}, '', `/${route}`);
                 setCurrentView(route);
               }}
-              style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 800, margin: 0 }}
+              style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 800, margin: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}
             >
               📊 {currentUser.name ? currentUser.name.split(' ')[0] : currentUser.role} Dashboard
             </button>
-            <button className="btn-logout-react" onClick={onLogout}>
+            <button 
+              className="btn-logout-react" 
+              onClick={onLogout}
+              style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 800, margin: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}
+            >
               <span>➔ Log Out</span>
             </button>
           </>
@@ -58,6 +64,7 @@ export default function Header({ currentView, setCurrentView, currentUser, onLog
           <button 
             className="btn-logout-react" 
             onClick={() => { window.history.pushState({}, '', '/login'); setCurrentView('login'); }}
+            style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 800, margin: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}
           >
             <span>🔑 Sign In</span>
           </button>

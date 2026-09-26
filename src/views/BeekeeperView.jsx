@@ -317,16 +317,6 @@ export default function BeekeeperView({ authToken, currentUser }) {
               Real-time hive health monitoring, acoustic metrics, and mandatory comb frame photo evidence geotagging.
             </p>
           </div>
-          
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button 
-              className="btn-white" 
-              onClick={handleCaptureLocation}
-              style={{ fontSize: '0.85rem', padding: '10px 18px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              📍 <span>{geoCoords.split('(')[0]}</span>
-            </button>
-          </div>
         </div>
 
         {/* FLEET KPI METRICS HEADER */}
@@ -352,9 +342,6 @@ export default function BeekeeperView({ authToken, currentUser }) {
               <h2 style={{ fontSize: '1.6rem', fontWeight: 900, color: '#0f172a', margin: 0 }}>
                 Register New Honey Batch
               </h2>
-              <span style={{ background: 'rgba(245, 184, 20, 0.2)', color: '#b45309', border: '1px solid rgba(245, 184, 20, 0.4)', padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 800 }}>
-                Full Screen Guided Mode
-              </span>
             </div>
             <p style={{ fontSize: '0.88rem', color: '#64748b', margin: '4px 0 0 0' }}>
               All 4 sections must be completed by the beekeeper before cryptographic batch registration.

@@ -286,8 +286,12 @@ const serveReactApp = (req, res) => {
 app.get('/explore', serveReactApp);
 app.get('/login', serveReactApp);
 app.get('/beekeeper', serveReactApp);
+app.get('/bee', serveReactApp);
 app.get('/tester', serveReactApp);
+app.get('/lab', serveReactApp);
+app.get('/laboratory', serveReactApp);
 app.get('/retailer', serveReactApp);
+app.get('/retail', serveReactApp);
 app.get('/consumer', serveReactApp);
 app.get('/pdf', serveReactApp);
 app.get('/pdf/:batchId', serveReactApp);

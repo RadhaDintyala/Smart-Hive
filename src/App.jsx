@@ -29,33 +29,48 @@ export default function App() {
   const [selectedBatchId, setSelectedBatchId] = useState('BATCH-2026-HIM-101');
 
   useEffect(() => {
-    // Handle URL pathname and query param routing on initial load
-    const path = window.location.pathname.toLowerCase();
-    const params = new URLSearchParams(window.location.search);
-    const bId = params.get('batchId');
+    // Handle URL pathname and query param routing on initial load & popstate
+    const syncRouteFromPath = () => {
+      const path = window.location.pathname.toLowerCase();
+      const params = new URLSearchParams(window.location.search);
+      const bId = params.get('batchId');
 
-    if (path.startsWith('/pdf/')) {
-      const pdfBatchId = path.split('/pdf/')[1];
-      if (pdfBatchId) setSelectedBatchId(pdfBatchId.toUpperCase());
-      setCurrentView('pdf');
-      return;
-    }
+      if (path.startsWith('/pdf/')) {
+        const pdfBatchId = path.split('/pdf/')[1];
+        if (pdfBatchId) setSelectedBatchId(pdfBatchId.toUpperCase());
+        setCurrentView('pdf');
+        return;
+      }
 
-    if (bId) {
-      setSelectedBatchId(bId);
-    }
+      if (bId) {
+        setSelectedBatchId(bId);
+      }
 
-    if (path === '/login') setCurrentView('login');
-    else if (path === '/explore') setCurrentView('explore');
-    else if (path === '/beekeeper') setCurrentView('beekeeper');
-    else if (path === '/tester') setCurrentView('tester');
-    else if (path === '/retailer') setCurrentView('retailer');
-    else if (path === '/consumer') setCurrentView('consumer');
-    else if (path === '/pdf') setCurrentView('pdf');
-    else if (path === '/feedback') setCurrentView('feedback');
-    else if (path === '/contact') setCurrentView('contact');
-    else if (bId) setCurrentView('consumer');
-    else setCurrentView('home');
+      if (path === '/login') setCurrentView('login');
+      else if (path === '/explore') setCurrentView('explore');
+      else if (path === '/beekeeper' || path === '/bee') {
+        if (path === '/bee') window.history.replaceState({}, '', '/beekeeper');
+        setCurrentView('beekeeper');
+      }
+      else if (path === '/tester' || path === '/lab' || path === '/laboratory') {
+        if (path === '/lab' || path === '/laboratory') window.history.replaceState({}, '', '/tester');
+        setCurrentView('tester');
+      }
+      else if (path === '/retailer' || path === '/retail') {
+        if (path === '/retail') window.history.replaceState({}, '', '/retailer');
+        setCurrentView('retailer');
+      }
+      else if (path === '/consumer') setCurrentView('consumer');
+      else if (path === '/pdf') setCurrentView('pdf');
+      else if (path === '/feedback') setCurrentView('feedback');
+      else if (path === '/contact') setCurrentView('contact');
+      else if (bId) setCurrentView('consumer');
+      else setCurrentView('home');
+    };
+
+    syncRouteFromPath();
+    window.addEventListener('popstate', syncRouteFromPath);
+    return () => window.removeEventListener('popstate', syncRouteFromPath);
   }, []);
 
   const handleLoginSuccess = (token, profile, redirectRoute) => {
@@ -64,9 +79,24 @@ export default function App() {
     setAuthToken(token);
     setCurrentUser(profile);
 
-    if (redirectRoute === '/beekeeper') setCurrentView('beekeeper');
-    else if (redirectRoute === '/tester') setCurrentView('tester');
-    else if (redirectRoute === '/retailer') setCurrentView('retailer');
+    let targetRoute = redirectRoute;
+    if (!targetRoute) {
+      if (profile?.role === 'Beekeeper') targetRoute = '/beekeeper';
+      else if (profile?.role === 'Laboratory') targetRoute = '/tester';
+      else if (profile?.role === 'Retailer') targetRoute = '/retailer';
+      else targetRoute = '/consumer';
+    }
+
+    if (targetRoute === '/bee') targetRoute = '/beekeeper';
+    if (targetRoute === '/lab' || targetRoute === '/laboratory') targetRoute = '/tester';
+    if (targetRoute === '/retail') targetRoute = '/retailer';
+
+    // Ensure the address bar changes from /login to /beekeeper (or target role route)
+    window.history.pushState({}, '', targetRoute);
+
+    if (targetRoute === '/beekeeper') setCurrentView('beekeeper');
+    else if (targetRoute === '/tester') setCurrentView('tester');
+    else if (targetRoute === '/retailer') setCurrentView('retailer');
     else setCurrentView('consumer');
   };
 
@@ -80,6 +110,7 @@ export default function App() {
   };
 
   const handleSelectRoleFromDrawer = (username) => {
+    window.history.pushState({}, '', '/login');
     setCurrentView('login');
   };
 

@@ -74,12 +74,6 @@ export default function FleetKpiHeader({
           </div>
         </div>
       ))}
-
-      {isDegraded && (
-        <div style={{ gridColumn: '1 / -1', fontSize: '0.75rem', color: '#92400e', fontWeight: 700 }}>
-          ⚠️ Edge model sidecar offline - infected count derived from the on-device VOC/acoustic heuristic.
-        </div>
-      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import QrScanner from './QrScanner';
 
 /**
  * Unified verification box.
@@ -16,8 +17,8 @@ import React, { useState } from 'react';
  * @param {string} [props.subtitle]
  * @param {string} props.value             Current Batch ID input.
  * @param {(v: string) => void} props.onChange
- * @param {() => void} props.onSubmit      Invoked with the trimmed value.
- * @param {() => void} props.onScan        Opens the native QR scanner.
+ * @param {() => void} props.onSubmit      Invoked with the trimmed value or a
+ *                                          decoded QR payload.
  * @param {string} [props.placeholder]
  * @param {string} [props.error]           Inline validation / lookup error.
  * @param {boolean} [props.compact]        Tightens padding for the result viewport.
@@ -29,7 +30,6 @@ export default function VerificationCard({
   value,
   onChange,
   onSubmit,
-  onScan,
   placeholder = 'Enter Batch ID or paste QR payload (e.g. BATCH-2026-HIM-101)...',
   error = '',
   compact = false,
@@ -38,15 +38,24 @@ export default function VerificationCard({
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
 
+  // The camera button now genuinely opens the scanner. It must NOT resolve the
+  // current input value: that is what made the button appear to "reopen the
+  // previous report" instead of scanning.
   const triggerScan = () => {
     setShowScanner(true);
     setScanning(true);
-    onScan();
   };
 
   const closeScanner = () => {
     setShowScanner(false);
     setScanning(false);
+  };
+
+  /** A decoded QR payload is the source of truth - ignore whatever was typed. */
+  const handleDecoded = (payload) => {
+    closeScanner();
+    onChange(payload);
+    onSubmit(payload);
   };
 
   return (
@@ -124,6 +133,10 @@ export default function VerificationCard({
       </div>
 
       {showScanner && (
+        <QrScanner onScan={handleDecoded} onClose={closeScanner} />
+      )}
+
+      {scanning && !showScanner && (
         <div
           style={{
             background: '#000000',
@@ -134,22 +147,10 @@ export default function VerificationCard({
             alignItems: 'center',
             justifyContent: 'center',
             color: '#fff',
-            position: 'relative',
-            overflow: 'hidden',
           }}
         >
-          {scanning ? (
-            <div>
-              <div style={{ fontSize: '2.5rem', marginBottom: '8px' }} className="animate-bounce">📱</div>
-              <div style={{ fontWeight: 800, color: '#f5b814', fontSize: '0.95rem' }}>Scanning Honey Jar QR Code...</div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>Matching Ledger Hash...</div>
-            </div>
-          ) : (
-            <div>
-              <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>📷</div>
-              <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Align QR Code within camera viewport</div>
-            </div>
-          )}
+          <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>📱</div>
+          <div style={{ fontWeight: 800, color: '#f5b814', fontSize: '0.95rem' }}>Starting camera…</div>
         </div>
       )}
 

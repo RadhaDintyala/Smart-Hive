@@ -1027,7 +1027,219 @@ button:active {
 }
 .card-neo:hover {
     transform: translate(-2px, -2px);
-    box-shadow: 6px 6px 0px #000000;
+    box-shadow: 6px 6px 0px #000;
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   RESPONSIVE / MOBILE
+   ══════════════════════════════════════════════════════════════════
+   Most view layouts are composed with inline `grid-template-columns`
+   values. Those inline declarations beat a plain stylesheet rule, so the
+   overrides below use attribute selectors on the serialised `style`
+   attribute together with `!important`. This buys a single responsive
+   source of truth without editing ~30 inline style objects.
+
+   Without these overrides a 320px-wide phone overflows horizontally:
+   `repeat(auto-fit, minmax(320px, 1fr))` cannot shrink below its 320px
+   track floor, so the page scrolls sideways and buttons fall off-screen.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Respect the OS "increase text size" setting instead of forcing 100%. */
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+img, video, canvas, svg {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Never allow a stray wide child to create a sideways scroll. */
+body {
+    overflow-x: hidden;
+}
+
+/* Tap targets: iOS/ANDROID guidelines want >= 44px. */
+button, a, select, input[type="button"], input[type="submit"] {
+    touch-action: manipulation;
+}
+
+.neo-input, input, select, textarea {
+    /* 16px minimum stops iOS Safari from zooming the viewport on focus. */
+    font-size: max(16px, 1em);
+}
+
+.neo-input:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: rgba(241, 245, 249, 0.8);
+}
+
+/* ── Tablet and below: structural collapse ───────────────────────── */
+@media (max-width: 900px) {
+    .app-container {
+        padding: 20px 16px 44px;
+    }
+
+    .app-header {
+        padding: 12px 16px;
+    }
+
+    .brand-title {
+        font-size: 1.15rem;
+    }
+
+    /* Master/detail splits stack: the 30% column is unusable below ~700px. */
+    [style*="minmax(240px, 30%)"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Fixed three-column transit board -> single column. */
+    [style*="grid-template-columns: repeat(3, minmax(0, 1fr))"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Metric tiles stay 2-up so the dashboard does not become a long ribbon. */
+    [style*="grid-template-columns: repeat(4, 1fr)"] {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    [style*="minmax(130px, 1fr)"],
+    [style*="minmax(180px, 1fr)"],
+    [style*="minmax(200px, 1fr)"],
+    [style*="minmax(220px, 1fr)"] {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    /* Wide content cards stack instead of overflowing. */
+    [style*="minmax(240px, 1fr)"],
+    [style*="minmax(260px, 1fr)"],
+    [style*="minmax(280px, 1fr)"],
+    [style*="minmax(300px, 1fr)"],
+    [style*="minmax(320px, 1fr)"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Two-column field rows become one column. */
+    [style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    .landing-hero-card {
+        padding: 20px 16px;
+        border-radius: 16px;
+    }
+
+    .hero-title-bold {
+        font-size: 1.9rem;
+    }
+
+    .hero-desc-text {
+        font-size: 0.95rem;
+    }
+
+    .hero-bee-wrapper {
+        min-height: 200px;
+        padding: 16px;
+    }
+
+    .hero-bee-img {
+        max-height: 180px;
+    }
+
+    /* Search bar: the input and the QR button stop sharing one line. */
+    .hero-search-bar {
+        flex-wrap: wrap;
+        padding: 8px 12px;
+    }
+
+    .hero-search-bar input {
+        min-width: 100%;
+        padding: 6px 0;
+    }
+
+    .sidebar-drawer {
+        /* Full-width drawer on phones, with a tappable close target. */
+        width: min(320px, 86vw);
+    }
+
+    .neo-card,
+    .full-screen-batch-card,
+    .glass-section-box {
+        padding: 18px 14px;
+        border-radius: 16px;
+    }
+
+    .neo-card-title {
+        font-size: 1.15rem;
+    }
+}
+
+/* ── Phones ──────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .btn-yellow, .btn-white, .btn-hero-yellow, .btn-hero-white {
+        /* Full-width, comfortably tappable buttons beat cramped side-by-side. */
+        width: 100%;
+        justify-content: center;
+        padding: 13px 18px;
+    }
+
+    .app-footer {
+        padding: 22px 14px;
+        font-size: 0.8rem;
+    }
+
+    .feature-cards-grid {
+        gap: 14px;
+    }
+
+    .feature-card-neo {
+        padding: 18px 16px;
+    }
+
+    /* Metric tiles drop to a single column on the narrowest screens. */
+    [style*="minmax(130px, 1fr)"],
+    [style*="minmax(180px, 1fr)"],
+    [style*="minmax(200px, 1fr)"],
+    [style*="minmax(220px, 1fr)"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    [style*="grid-template-columns: repeat(4, 1fr)"] {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+/* ── Landscape phones: vertical space is the scarce resource ─────── */
+@media (max-height: 480px) and (orientation: landscape) {
+    .app-header {
+        position: static;
+    }
+
+    .app-container {
+        padding-top: 12px;
+    }
+}
+
+/* ── Motion / print preferences ──────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+@media print {
+    .app-header, .app-footer, .sidebar-drawer, .sidebar-overlay {
+        display: none !important;
+    }
+}
+
 
 

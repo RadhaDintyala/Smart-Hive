@@ -150,6 +150,53 @@ const memoryUsers = {
 const memoryHoneyBatches = new Map();
 const activeSessions = new Map();
 
+// ==========================================
+// 0.5 DURABLE LEDGER FILE (shared across machines)
+// ==========================================
+// MongoDB is optional, but without it the batch map lived in RAM only, so a
+// batch created on one machine vanished on restart and was invisible to every
+// other machine. This JSON file is the always-on ledger of record: it survives
+// restarts and is the single source of truth that all clients read through
+// /api/batches. When Mongo IS connected it is still written, so the two never
+// silently diverge.
+const DATA_DIR = path.join(__dirname, '.data');
+const LEDGER_FILE = path.join(DATA_DIR, 'ledger.json');
+
+function readLedgerFromDisk() {
+    try {
+        if (!fs.existsSync(LEDGER_FILE)) return [];
+        const parsed = JSON.parse(fs.readFileSync(LEDGER_FILE, 'utf8'));
+        return Array.isArray(parsed.batches) ? parsed.batches : [];
+    } catch (err) {
+        console.error('Ledger read failed, starting empty:', err.message);
+        return [];
+    }
+}
+
+function writeLedgerToDisk() {
+    try {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        const payload = { savedAt: new Date().toISOString(), batches: Array.from(memoryHoneyBatches.values()) };
+        // Write-then-rename so a crash mid-write cannot truncate the ledger.
+        const tmp = `${LEDGER_FILE}.tmp`;
+        fs.writeFileSync(tmp, JSON.stringify(payload, null, 2));
+        fs.renameSync(tmp, LEDGER_FILE);
+    } catch (err) {
+        console.error('Ledger write failed:', err.message);
+    }
+}
+
+/** Rehydrate the in-memory map from disk at boot. */
+function hydrateLedgerFromDisk() {
+    const onDisk = readLedgerFromDisk();
+    onDisk.forEach((b) => {
+        if (b && b.batchId) memoryHoneyBatches.set(b.batchId, b);
+    });
+    if (onDisk.length) {
+        console.log(`💾 Ledger rehydrated from disk: ${onDisk.length} batch(es).`);
+    }
+}
+
 async function seedMongoDatabase() {
     try {
         const userCount = await User.countDocuments();
@@ -258,9 +305,20 @@ async function initSeedBatch() {
         consumerConcerns: []
     };
 
+    if (memoryHoneyBatches.has(batchId)) {
+        // A real record for this batch already exists (created via the API on
+        // some machine). Never let the demo seed clobber it.
+        return;
+    }
+
     memoryHoneyBatches.set(batchId, batch);
+    writeLedgerToDisk();
 }
 
+// Load whatever is on disk FIRST, then seed the demo batch only if the ledger
+// is genuinely empty. This ordering is what stops the seed from overwriting
+// real batches on every restart.
+hydrateLedgerFromDisk();
 initSeedBatch();
 
 // Connect to MongoDB asynchronously
@@ -310,8 +368,31 @@ function authenticateSession(req, res, next) {
     next();
 }
 
+/**
+ * Single batch lookup used by every route. Order of preference:
+ * Mongo (when connected) -> durable file ledger -> in-memory map.
+ * Keeping this in one place is what makes a batch created on machine A
+ * resolvable on machine B.
+ */
+async function loadBatch(batchId) {
+    if (!batchId) return null;
+    if (isMongoConnected) {
+        try {
+            const found = await HoneyBatch.findOne({ batchId });
+            if (found) return found._doc || found;
+        } catch (e) { console.error(e); }
+    }
+    const onDisk = readLedgerFromDisk().find((b) => b && b.batchId === batchId);
+    if (onDisk) {
+        // Keep the hot map warm so later writes merge onto the full record.
+        memoryHoneyBatches.set(batchId, onDisk);
+        return onDisk;
+    }
+    return memoryHoneyBatches.get(batchId) || null;
+}
+
 // ==========================================
-// 2. AUTHENTICATION & LOGIN REST API
+// 1. AUTHENTICATION & LOGIN REST API
 // ==========================================
 app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
@@ -370,6 +451,7 @@ app.post('/api/beekeeper/batch/create', authenticateSession, async (req, res) =>
 
     const {
         batchIdCustom,
+        batchId: batchIdAlias,
         cropName,
         harvestStartDate,
         harvestEndDate,
@@ -383,17 +465,32 @@ app.post('/api/beekeeper/batch/create', authenticateSession, async (req, res) =>
         audioFilename,
         audioFreq,
         imageCaption,
-        imageBase64
+        imageBase64,
+        geoCoords,
+        evidenceGeo,
+        evidenceCapturedAtUtc,
+        txHash
     } = req.body;
 
-    if (!imageBase64 || imageBase64.trim() === '') {
+    // The client cache is flat and calls this `batchId`; the form posts
+    // `batchIdCustom`. Accept both so a batch registered offline keeps its
+    // identity when it is pushed to the shared ledger - otherwise the server
+    // would mint a second, differently-numbered batch for the same honey.
+    const requestedBatchId = (batchIdCustom || batchIdAlias || '').trim();
+    const isLedgerResync = Boolean(requestedBatchId);
+
+    // Frame evidence is mandatory for a *new* registration made through the
+    // beekeeper form. A resync of an already-cached record is not a new claim,
+    // so it must not be rejected for a missing photo or the record could never
+    // leave the machine that created it.
+    if (!isLedgerResync && (!imageBase64 || imageBase64.trim() === '')) {
         return res.status(400).json({
             success: false,
             error: "Image Evidence Upload is MANDATORY. The form cannot be submitted without uploading a comb/frame photo evidence."
         });
     }
 
-    const batchId = batchIdCustom || `BATCH-2026-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const batchId = requestedBatchId || `BATCH-2026-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
     const iotSensorDetails = {
         temperature: parseFloat(temperature || 35.0),
@@ -419,11 +516,16 @@ app.post('/api/beekeeper/batch/create', authenticateSession, async (req, res) =>
         timestamp: new Date().toISOString()
     }] : [];
 
-    const uploadedImages = [{
+    const uploadedImages = imageBase64 ? [{
         name: "hive_evidence_photo.jpg",
         caption: imageCaption || "Mandatory beekeeper frame evidence photo",
-        data: imageBase64
-    }];
+        data: imageBase64,
+        // GPS fix + UTC instant captured at shutter time, so the origin claim is
+        // anchored to sensor evidence rather than free text.
+        geo: evidenceGeo || null,
+        capturedAtUtc: evidenceCapturedAtUtc || new Date().toISOString(),
+        capturedVia: "camera"
+    }] : [];
 
     const rawPayload = JSON.stringify({ batchId, beekeeper: req.session.profile.name, iotSensorDetails, cropDetails });
     const sha256Hash = crypto.createHash('sha256').update(rawPayload + imageBase64).digest('hex');
@@ -433,10 +535,13 @@ app.post('/api/beekeeper/batch/create', authenticateSession, async (req, res) =>
     const verifyUrl = `${protocol}://${host}/consumer?batchId=${batchId}`;
     const qrCodeDataUrl = await QRCode.toDataURL(verifyUrl, { margin: 2, color: { dark: '#0a0a0a', light: '#ffffff' } });
 
+    const existingServerBatch = await loadBatch(batchId);
+
     const newBatch = {
+        ...(existingServerBatch || {}),
         batchId,
-        createdAt: new Date(),
-        status: "PENDING_LAB",
+        createdAt: (existingServerBatch && existingServerBatch.createdAt) || new Date(),
+        status: (existingServerBatch && existingServerBatch.status) || "PENDING_LAB",
         beekeeperProfile: {
             name: req.session.profile.name,
             apiary: req.session.profile.apiary,
@@ -446,17 +551,27 @@ app.post('/api/beekeeper/batch/create', authenticateSession, async (req, res) =>
         cropDetails,
         iotSensorDetails,
         audioFiles,
-        uploadedImages,
+        uploadedImages: uploadedImages.length ? uploadedImages : (existingServerBatch?.uploadedImages || []),
         sha256Hash,
         qrCodeDataUrl,
         verifyUrl,
-        labTestResults: null,
-        retailerLogs: [],
-        consumerRatings: [],
-        consumerConcerns: []
+        // Geotag + on-chain hash are stored as first-class fields so the
+        // consumer view can render origin without re-deriving it.
+        geoCoords: geoCoords || (evidenceGeo && evidenceGeo.latitude != null
+            ? `GPS: ${Number(evidenceGeo.latitude).toFixed(4)}° N, ${Number(evidenceGeo.longitude).toFixed(4)}° E (apiary)`
+            : 'Geotag unavailable at capture'),
+        txHash: txHash || sha256Hash,
+        // Sealed facts are never reset by a resync. A stale local copy re-pushed
+        // from another machine must not erase a NABL certificate or a store
+        // receipt, and must not demote a batch back to PENDING_LAB.
+        labTestResults: (existingServerBatch && existingServerBatch.labTestResults) || null,
+        retailerLogs: (existingServerBatch && existingServerBatch.retailerLogs) || [],
+        consumerRatings: (existingServerBatch && existingServerBatch.consumerRatings) || [],
+        consumerConcerns: (existingServerBatch && existingServerBatch.consumerConcerns) || []
     };
 
     memoryHoneyBatches.set(batchId, newBatch);
+    writeLedgerToDisk();
 
     if (isMongoConnected) {
         try {
@@ -482,13 +597,7 @@ app.post('/api/lab/test/submit', authenticateSession, async (req, res) => {
     }
 
     const { batchId, purityPercentage, moisturePercentage, hmfMgKg, pollenCount, antibioticResidues, status, feedback } = req.body;
-    let batch = memoryHoneyBatches.get(batchId);
-
-    if (isMongoConnected) {
-        try {
-            batch = await HoneyBatch.findOne({ batchId });
-        } catch (e) { console.error(e); }
-    }
+    const batch = await loadBatch(batchId);
 
     if (!batch) return res.status(404).json({ success: false, error: `Batch ${batchId} not found.` });
 
@@ -510,6 +619,7 @@ app.post('/api/lab/test/submit', authenticateSession, async (req, res) => {
     batch.status = newStatus;
 
     memoryHoneyBatches.set(batchId, batch);
+    writeLedgerToDisk();
 
     if (isMongoConnected) {
         try {
@@ -530,18 +640,40 @@ app.post('/api/retailer/verify', authenticateSession, async (req, res) => {
     }
 
     const { batchId, stockQuantity, storeRemarks } = req.body;
-    let batch = memoryHoneyBatches.get(batchId);
-
-    if (isMongoConnected) {
-        try {
-            batch = await HoneyBatch.findOne({ batchId });
-        } catch (e) { console.error(e); }
-    }
+    const batch = await loadBatch(batchId);
 
     if (!batch) return res.status(404).json({ success: false, error: `Batch ${batchId} not found.` });
 
+    // Store identity comes from the authenticated session, never from the
+    // request body: otherwise any caller could impersonate another outlet by
+    // posting a different `storeName` and slip a second receipt past the guard.
+    const storeName = req.session.profile.name;
+    const storeId = req.session.username || storeName;
+
+    // A store receipt is an immutable ledger fact: one receipt per store per
+    // batch. Re-posting the same form used to blindly `$push` a duplicate, so
+    // the audit history grew every time the button was clicked. The existing
+    // receipt is now returned as-is with `alreadyLogged` so the client can
+    // render it read-only instead of writing a second copy.
+    //
+    // Matched on the stable `storeId` with a `storeName` fallback so receipts
+    // written before `storeId` was stamped still de-duplicate.
+    const existingLogs = batch.retailerLogs || [];
+    const alreadyLogged = existingLogs.find((l) => (l.storeId || l.storeName) === storeId)
+        || existingLogs.find((l) => l.storeName === storeName);
+    if (alreadyLogged) {
+        return res.status(409).json({
+            success: false,
+            alreadyLogged: true,
+            error: `A store receipt for ${batchId} is already sealed by ${storeName}. Ledger receipts are immutable and cannot be duplicated.`,
+            log: alreadyLogged,
+            batch
+        });
+    }
+
     const verificationLog = {
-        storeName: req.session.profile.name,
+        storeId,
+        storeName,
         storeLocation: req.session.profile.storeLocation,
         verifiedAt: new Date().toISOString(),
         status: "VERIFIED_IN_STOCK",
@@ -554,6 +686,7 @@ app.post('/api/retailer/verify', authenticateSession, async (req, res) => {
     batch.status = "RETAIL_STOCK";
 
     memoryHoneyBatches.set(batchId, batch);
+    writeLedgerToDisk();
 
     if (isMongoConnected) {
         try {
@@ -570,16 +703,7 @@ app.post('/api/retailer/verify', authenticateSession, async (req, res) => {
 // ==========================================
 app.get('/api/consumer/verify/:batchId', async (req, res) => {
     const { batchId } = req.params;
-    let batch = null;
-
-    if (isMongoConnected) {
-        try {
-            batch = await HoneyBatch.findOne({ batchId });
-        } catch (e) { console.error(e); }
-    }
-    if (!batch) {
-        batch = memoryHoneyBatches.get(batchId);
-    }
+    const batch = await loadBatch(batchId);
 
     if (!batch) {
         return res.status(404).json({ success: false, error: `Honey Batch ${batchId} invalid or not registered.` });
@@ -596,13 +720,7 @@ app.get('/api/consumer/verify/:batchId', async (req, res) => {
 
 app.post('/api/consumer/rating', async (req, res) => {
     const { batchId, reviewerName, rating, comment } = req.body;
-    let batch = memoryHoneyBatches.get(batchId);
-
-    if (isMongoConnected) {
-        try {
-            batch = await HoneyBatch.findOne({ batchId });
-        } catch (e) { console.error(e); }
-    }
+    const batch = await loadBatch(batchId);
 
     if (!batch) return res.status(404).json({ success: false, error: `Batch ${batchId} not found.` });
 
@@ -617,6 +735,7 @@ app.post('/api/consumer/rating', async (req, res) => {
     batch.consumerRatings.unshift(newRating);
 
     memoryHoneyBatches.set(batchId, batch);
+    writeLedgerToDisk();
 
     if (isMongoConnected) {
         try {
@@ -629,13 +748,7 @@ app.post('/api/consumer/rating', async (req, res) => {
 
 app.post('/api/consumer/concern', async (req, res) => {
     const { batchId, consumerName, category, comments } = req.body;
-    let batch = memoryHoneyBatches.get(batchId);
-
-    if (isMongoConnected) {
-        try {
-            batch = await HoneyBatch.findOne({ batchId });
-        } catch (e) { console.error(e); }
-    }
+    const batch = await loadBatch(batchId);
 
     if (!batch) return res.status(404).json({ success: false, error: `Batch ${batchId} not found.` });
 
@@ -652,6 +765,7 @@ app.post('/api/consumer/concern', async (req, res) => {
     batch.consumerConcerns.unshift(concern);
 
     memoryHoneyBatches.set(batchId, batch);
+    writeLedgerToDisk();
 
     if (isMongoConnected) {
         try {
@@ -662,6 +776,10 @@ app.post('/api/consumer/concern', async (req, res) => {
     res.json({ success: true, message: "Consumer Concern Registered", concern });
 });
 
+// Shared ledger read. Mongo is preferred when it is actually connected AND has
+// data; otherwise the durable file ledger answers. The previous version fell
+// back to `memoryHoneyBatches` only, which is exactly why a batch created on
+// another machine looked missing.
 app.get('/api/batches', async (_, res) => {
     let list = [];
     if (isMongoConnected) {
@@ -670,9 +788,24 @@ app.get('/api/batches', async (_, res) => {
         } catch (e) { console.error(e); }
     }
     if (!list || list.length === 0) {
+        list = readLedgerFromDisk();
+    }
+    if (!list || list.length === 0) {
         list = Array.from(memoryHoneyBatches.values()).reverse();
     }
-    res.json({ success: true, batches: list });
+    // Strip Mongoose internals so the payload is clean JSON.
+    const clean = list.map((b) => (b && b._doc ? b._doc : b));
+    res.json({ success: true, batches: clean });
+});
+
+/** Liveness probe the client uses to decide remote-first vs. local-only mode. */
+app.get('/api/health', (_, res) => {
+    res.json({
+        success: true,
+        mongo: isMongoConnected,
+        batches: memoryHoneyBatches.size,
+        time: new Date().toISOString()
+    });
 });
 
 function broadcastUpdate(type, data) {

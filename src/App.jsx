@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Header from './components/Header.jsx';
 import Footer from './components/Footer.jsx';
 import SidebarDrawer from './components/SidebarDrawer.jsx';
+import { bootstrapLedger, connectLedgerSocket } from './services/batchStore.js';
 
 import HomeView from './views/HomeView.jsx';
 import ExploreView from './views/ExploreView.jsx';
@@ -27,6 +28,22 @@ export default function App() {
   const [authToken, setAuthToken] = useState(() => localStorage.getItem('sh_token') || null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState('BATCH-2026-HIM-101');
+
+  /**
+   * Pull the shared ledger once at boot and keep it live over WebSocket.
+   * Without this the app only ever saw this browser's localStorage, so batches
+   * registered elsewhere were invisible.
+   */
+  useEffect(() => {
+    // Prime the cache from the shared ledger, and keep it live over WebSocket.
+    // Without this the app only ever saw this browser's localStorage, so batches
+    // registered on another machine were invisible.
+    //
+    // `bootstrapLedger` only syncs; the single socket is owned here so this
+    // effect's teardown can actually close it (StrictMode double-mounts).
+    bootstrapLedger().catch(() => {});
+    return connectLedgerSocket();
+  }, []);
 
   useEffect(() => {
     // Handle URL pathname and query param routing on initial load & popstate

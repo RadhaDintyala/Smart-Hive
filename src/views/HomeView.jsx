@@ -10,19 +10,16 @@ import VerificationCard from '../components/VerificationCard';
 export default function HomeView({ setCurrentView, setSelectedBatchId }) {
   const [homeInput, setHomeInput] = useState('');
 
-  const handleVerifyBatch = (batchId) => {
-    if (setSelectedBatchId) setSelectedBatchId(batchId);
-    window.history.pushState({}, '', `/consumer?batchId=${encodeURIComponent(batchId)}`);
-    setCurrentView('consumer');
-  };
-
   /**
-   * QR scanner hand-off. The landing page cannot decode a QR without a
-   * decoder dependency, so the scan is delegated to the verification viewport
-   * which owns the scanner modal.
+   * A decoded QR payload (or a typed Batch ID) hands off to the consumer
+   * verification viewport, which performs the authoritative ledger lookup.
    */
-  const handleScanRequested = () => {
-    handleVerifyBatch(homeInput.trim() || 'BATCH-2026-HIM-101');
+  const handleVerifyBatch = (batchId) => {
+    const id = (batchId || '').trim();
+    if (!id) return;
+    if (setSelectedBatchId) setSelectedBatchId(id);
+    window.history.pushState({}, '', `/consumer?batchId=${encodeURIComponent(id)}`);
+    setCurrentView('consumer');
   };
 
   const handleRegisterBatchClick = () => {
@@ -110,7 +107,6 @@ export default function HomeView({ setCurrentView, setSelectedBatchId }) {
             value={homeInput}
             onChange={setHomeInput}
             onSubmit={handleVerifyBatch}
-            onScan={handleScanRequested}
           />
         </div>
       </section>

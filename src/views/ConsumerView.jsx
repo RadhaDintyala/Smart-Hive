@@ -2,10 +2,41 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import BlockchainVerifier from '../components/BlockchainVerifier';
 import VerificationCard from '../components/VerificationCard';
 import ProvenanceTimeline from '../components/ProvenanceTimeline';
-import { findBatchById } from '../services/batchStore';
+import { findBatchById, fetchBatchRemote } from '../services/batchStore';
 import { recordScan } from '../services/scanHistory';
 import { buildProvenanceTimeline, summariseBatch } from '../services/provenance';
 import { formatMeasure } from '../services/units';
+
+/**
+ * Pull a Batch ID out of anything the platform can print or encode into a QR.
+ *
+ * Handles every payload shape in circulation:
+ *   - bare id:            BATCH-2026-HIM-101
+ *   - verify URL:         http://host/consumer?batchId=BATCH-...
+ *   - PDF deep link:      http://host/pdf/BATCH-...
+ *   - query string only:  ?batchId=BATCH-...
+ *
+ * @param {string} raw
+ * @returns {string} the batch id, upper-cased, or '' when unparseable
+ */
+function extractBatchId(raw) {
+  const text = (raw || '').trim();
+  if (!text) return '';
+
+  if (text.includes('batchId=')) {
+    const query = text.slice(text.indexOf('batchId=') + 'batchId='.length);
+    const value = query.split('&')[0].split('#')[0];
+    return decodeURIComponent(value).trim().toUpperCase();
+  }
+
+  if (text.includes('/pdf/')) {
+    return text.split('/pdf/').pop().split(/[/?#]/)[0].trim().toUpperCase();
+  }
+
+  // A bare id. Reject anything URL-shaped we failed to parse above.
+  if (/^https?:\/\//i.test(text)) return '';
+  return text.toUpperCase();
+}
 
 /**
  * Public consumer verification viewport.
@@ -27,6 +58,7 @@ export default function ConsumerView({ selectedBatchId, setCurrentView, renderPr
   const [verifiedBatch, setVerifiedBatch] = useState(null);
   const [hasScanned, setHasScanned] = useState(false);
   const [scanError, setScanError] = useState('');
+  const [isResolving, setIsResolving] = useState(false);
   const [activeTab, setActiveTab] = useState('verify');
 
   const [rating, setRating] = useState('5');
@@ -48,30 +80,35 @@ export default function ConsumerView({ selectedBatchId, setCurrentView, renderPr
   /**
    * Resolve a QR payload to a batch and scope the viewport to it.
    *
+   * The lookup goes to the SHARED ledger first, then falls back to the local
+   * cache. A local-only lookup was why a product registered on one machine
+   * reported "not found" on another: the batch genuinely was not in that
+   * browser's localStorage. A QR payload is also accepted in every form the
+   * platform mints - a full verify URL, a /pdf/ deep link, or a bare Batch ID.
+   *
    * On every scan the previous result is discarded first, so rows from an
    * earlier batch can never survive into the new result.
    */
-  const processQrPayload = useCallback((qrPayload) => {
+  const processQrPayload = useCallback(async (qrPayload) => {
     setScanError('');
-    let targetId = (qrPayload || '').trim();
-    if (!targetId) return;
+    setIsResolving(true);
 
-    // Extract batchId if payload is a URL or search query
-    if (targetId.includes('batchId=')) {
-      try {
-        const url = new URL(targetId, window.location.origin);
-        targetId = url.searchParams.get('batchId') || targetId;
-      } catch {
-        // use raw
-      }
+    const targetId = extractBatchId(qrPayload);
+    if (!targetId) {
+      setVerifiedBatch(null);
+      setHasScanned(false);
+      setIsResolving(false);
+      return;
     }
-
-    const batch = findBatchById(targetId);
 
     // Clear every previously rendered row before adopting the new scope.
     setVerifiedBatch(null);
     setHasScanned(true);
     setActiveTab('verify');
+
+    let batch = await fetchBatchRemote(targetId);
+    if (!batch) batch = findBatchById(targetId);
+    setIsResolving(false);
 
     if (batch) {
       setVerifiedBatch(batch);
@@ -94,10 +131,12 @@ export default function ConsumerView({ selectedBatchId, setCurrentView, renderPr
     if (selectedBatchId) {
       processQrPayload(selectedBatchId);
     }
+    // A ledger write on ANY machine (this one or another) refreshes the open
+    // result, so a lab certification or store receipt appears without reload.
     const handleUpdate = () => {
       if (verifiedBatch) {
-        const refreshed = findBatchById(verifiedBatch.batchId);
-        if (refreshed) setVerifiedBatch(refreshed);
+        const cached = findBatchById(verifiedBatch.batchId);
+        if (cached) setVerifiedBatch(cached);
       }
     };
     window.addEventListener('sh_batches_updated', handleUpdate);
@@ -320,7 +359,18 @@ export default function ConsumerView({ selectedBatchId, setCurrentView, renderPr
 
         {/* ═══════════════ VERIFY TAB: unified box, then scoped result ═══════════════ */}
         {activeTab === 'verify' && (
-        !hasScanned ? (
+        isResolving ? (
+          /* Remote ledger lookup in flight - never flash "not found" for this. */
+          <div style={{ maxWidth: '680px', margin: '20px auto 40px auto', textAlign: 'center', padding: '48px 20px' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>⏳</div>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0f172a', margin: '0 0 6px 0' }}>
+              Querying the shared ledger…
+            </h2>
+            <p style={{ color: '#64748b', fontSize: '0.9rem', margin: 0 }}>
+              Checking the Batch ID against the national honey register.
+            </p>
+          </div>
+        ) : !hasScanned ? (
           <div style={{ maxWidth: '680px', margin: '20px auto 40px auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '20px' }}>
               <div style={{ fontSize: '4rem', marginBottom: '12px' }}>📱</div>
@@ -338,7 +388,6 @@ export default function ConsumerView({ selectedBatchId, setCurrentView, renderPr
               value={manualInput}
               onChange={setManualInput}
               onSubmit={processQrPayload}
-              onScan={() => processQrPayload(manualInput.trim() || 'BATCH-2026-HIM-101')}
               placeholder="Enter Batch ID or paste QR link (e.g. BATCH-2026-HIM-101)..."
             />
           </div>

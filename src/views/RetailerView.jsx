@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getStoredBatches, addRetailerLog } from '../services/batchStore';
+import { getStoredBatches, addRetailerLog, findBatchById, getStoreIdentity, LedgerConflictError } from '../services/batchStore';
 import TransitPipeline from '../components/TransitPipeline';
 import BatchDetailsModal from '../components/BatchDetailsModal';
 import { formatMeasure, jarsToVolume, formatMeasureOrFallback } from '../services/units';
@@ -50,16 +50,32 @@ export default function RetailerView({ authToken }) {
     }
   };
 
+  /**
+   * A batch is "sealed" once THIS store has filed a receipt for it. A store
+   * receipt is an immutable ledger fact - one per store per batch - so the form
+   * is disabled for an already-sealed batch and the existing receipt is shown
+   * read-only instead of appending a duplicate.
+   */
+  const existingReceipt = useMemo(() => {
+    if (!selectedBatch) return null;
+    const { storeId, storeName } = getStoreIdentity();
+    return (selectedBatch.retailerLogs || []).find(
+      (l) => (l.storeId || l.storeName) === storeId || l.storeName === storeName
+    ) || null;
+  }, [selectedBatch]);
+
+  const isSealed = Boolean(existingReceipt);
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!selectedBatch) return;
+    if (!selectedBatch || isSealed) return;
 
     setLoading(true);
     setMsg('');
 
+    const { storeName } = getStoreIdentity();
+
     const logEntry = {
-      storeId: 'RET-DELHI-09',
-      storeName: 'Organic Hive Superstore (Vasant Kunj)',
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
       temp: '18.4°C',
       stockQuantity: stockQty,
@@ -68,18 +84,33 @@ export default function RetailerView({ authToken }) {
       // guess a bare number or a status.
       measure: jarsToVolume(stockQty),
       transitStatus: 'delivered',
-      destination: 'Organic Hive Superstore (Vasant Kunj)',
+      destination: storeName,
       farmOriginLabel: `${selectedBatch.beekeeperName || selectedBatch.floralSource} • ${selectedBatch.geoCoords || 'geotag unrecorded'}`
     };
 
     setTimeout(() => {
-      const updatedList = addRetailerLog(selectedBatch.batchId, logEntry);
-      setBatches(updatedList);
-      const updatedBatch = updatedList.find(b => b.batchId === selectedBatch.batchId);
-      if (updatedBatch) setSelectedBatch(updatedBatch);
-
-      setLoading(false);
-      setMsg('✓ Store Receipt Audit Logged & Sealed to Ledger Successfully!');
+      try {
+        const { list: updatedList } = addRetailerLog(selectedBatch.batchId, logEntry);
+        setBatches(updatedList);
+        const updatedBatch = updatedList.find(b => b.batchId === selectedBatch.batchId);
+        if (updatedBatch) setSelectedBatch(updatedBatch);
+        setMsg('✓ Store Receipt Audit Logged & Sealed to Ledger Successfully!');
+      } catch (err) {
+        // The store refused a duplicate receipt (e.g. another machine filed it
+        // first). Surface the original receipt instead of writing a second one.
+        if (err instanceof LedgerConflictError) {
+          const fresh = findBatchById(selectedBatch.batchId);
+          if (fresh) {
+            setBatches(getStoredBatches());
+            setSelectedBatch(fresh);
+          }
+          setMsg(`🔒 ${err.message}`);
+        } else {
+          setMsg('Could not seal the receipt. Please retry.');
+        }
+      } finally {
+        setLoading(false);
+      }
     }, 600);
   };
 
@@ -353,7 +384,15 @@ export default function RetailerView({ authToken }) {
           </h2>
           <p style={{ color: '#64748b', fontSize: '0.88rem', margin: '0 0 24px 0' }}>
             Verify honey batch QR code upon delivery and register store stock inventory on the blockchain.
+            Each batch accepts exactly one receipt from this outlet - sealed receipts are immutable.
           </p>
+
+          {isSealed && (
+            <div style={{ padding: '14px', borderRadius: '14px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', fontSize: '0.85rem', fontWeight: 700, marginBottom: '18px' }}>
+              🔒 A store receipt for <strong>{selectedBatch?.batchId}</strong> is already sealed by {existingReceipt.storeName}
+              {' '}on {existingReceipt.timestamp}. Ledger receipts cannot be edited or duplicated.
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '16px' }}>
             <div>
@@ -368,11 +407,17 @@ export default function RetailerView({ authToken }) {
                   if (b) setSelectedBatch(b);
                 }}
               >
-                {batches.map(b => (
-                  <option key={b.batchId} value={b.batchId}>
-                    {b.batchId} - {b.cropName} ({b.labTestResults ? '✓ NABL Passed' : 'Pending Lab'})
-                  </option>
-                ))}
+                {batches.map(b => {
+                  const { storeId, storeName } = getStoreIdentity();
+                  const sealed = (b.retailerLogs || []).some(
+                    (l) => (l.storeId || l.storeName) === storeId || l.storeName === storeName
+                  );
+                  return (
+                    <option key={b.batchId} value={b.batchId}>
+                      {b.batchId} - {b.cropName} ({sealed ? '🔒 Receipt Sealed' : b.labTestResults ? '✓ NABL Passed' : 'Pending Lab'})
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
@@ -386,6 +431,7 @@ export default function RetailerView({ authToken }) {
                   className="neo-input"
                   value={stockQty}
                   onChange={e => setStockQty(e.target.value)}
+                  disabled={isSealed}
                   required
                 />
                 <span style={{ fontSize: '0.74rem', color: '#64748b', display: 'block', marginTop: '4px', fontWeight: 700 }}>
@@ -414,9 +460,16 @@ export default function RetailerView({ authToken }) {
                 rows={3}
                 value={remarks}
                 onChange={e => setRemarks(e.target.value)}
+                disabled={isSealed}
                 required
               />
             </div>
+
+            {isSealed && (
+              <div style={{ padding: '14px', textAlign: 'center', borderRadius: '12px', background: '#f1f5f9', border: '1px dashed #cbd5e1', color: '#475569', fontSize: '0.85rem', fontWeight: 800 }}>
+                ✓ Receipt Sealed — {formatMeasureOrFallback(existingReceipt.measure, `${existingReceipt.stockQuantity} jars`)} recorded
+              </div>
+            )}
 
             {msg && (
               <div style={{ padding: '12px', borderRadius: '12px', background: msg.includes('✓') ? '#dcfce7' : '#fee2e2', color: msg.includes('✓') ? '#166534' : '#991b1b', fontSize: '0.88rem', fontWeight: 700 }}>
@@ -424,14 +477,16 @@ export default function RetailerView({ authToken }) {
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-yellow"
-              style={{ padding: '16px', fontSize: '1rem', fontWeight: 800, marginTop: '8px' }}
-            >
-              <span>{loading ? 'Logging Audit Receipt...' : '⚡ Register Store Audit to Blockchain Ledger'}</span>
-            </button>
+            {!isSealed && (
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-yellow"
+                style={{ padding: '16px', fontSize: '1rem', fontWeight: 800, marginTop: '8px' }}
+              >
+                <span>{loading ? 'Logging Audit Receipt...' : '⚡ Register Store Audit to Blockchain Ledger'}</span>
+              </button>
+            )}
           </form>
         </div>
       )}

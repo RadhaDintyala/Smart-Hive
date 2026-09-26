@@ -5,13 +5,19 @@ const WebSocket = require('ws');
 const crypto = require('crypto');
 const path = require('path');
 const QRCode = require('qrcode');
-const mongoose = require('mongoose');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-app.use(express.static(path.join(__dirname, 'public')));
+const distPath = path.join(__dirname, 'dist');
+const publicPath = path.join(__dirname, 'public');
+
+if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+}
+app.use(express.static(publicPath));
 app.use(express.json({ limit: '30mb' }));
 
 // Mount Hyperledger Fabric 2.5 & IPFS Blockchain Router
@@ -269,7 +275,13 @@ mongoose.connect(MONGODB_URI, {
 });
 
 // React SPA Client Routes
-const serveReactApp = (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html'));
+const serveReactApp = (req, res) => {
+    const distIndex = path.join(__dirname, 'dist', 'index.html');
+    if (fs.existsSync(distIndex)) {
+        return res.sendFile(distIndex);
+    }
+    return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+};
 app.get('/explore', serveReactApp);
 app.get('/login', serveReactApp);
 app.get('/beekeeper', serveReactApp);

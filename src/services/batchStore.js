@@ -1,6 +1,63 @@
 // Unified Local & Server Batch Store for Smart Hive AI-IoT Blockchain
 const STORAGE_KEY = 'sh_batches_v2';
 
+/**
+ * Canonical on-ledger batch record. Shared shape across every view, so the
+ * typedef is declared once here and imported by the rest of the domain.
+ *
+ * @typedef {object} LabTestResults
+ * @property {string} [purityPercentage]
+ * @property {string} [moisturePercentage]
+ * @property {string} [hmfMgKg]
+ * @property {string} [antibioticResidues]
+ * @property {string} [pollenCount]
+ * @property {string} [feedback]
+ * @property {'PASS'|'REJECT'|string} [status]
+ * @property {string} [testedTimestamp]
+ * @property {string} [testerName]
+ */
+
+/**
+ * @typedef {object} RetailerLog
+ * @property {string} [storeId]
+ * @property {string} [storeName]
+ * @property {string} [timestamp]
+ * @property {string} [temp]
+ * @property {string} [stockQuantity]
+ * @property {string} [storeRemarks]
+ * @property {import('./types').TransitStatus} [transitStatus]
+ * @property {string} [destination]
+ * @property {string} [eta]
+ * @property {import('./types').Measure} [measure]
+ * @property {string} [farmOriginLabel]
+ */
+
+/**
+ * @typedef {object} Batch
+ * @property {string} batchId
+ * @property {string} [batchIdCustom]
+ * @property {string} [cropName]
+ * @property {string} [floralSource]
+ * @property {string} [harvestStartDate]
+ * @property {string} [yieldQuantityKg]
+ * @property {string} [hiveId]
+ * @property {string} [temperature]
+ * @property {string} [humidity]
+ * @property {string} [weight]
+ * @property {string} [vocPpm]
+ * @property {string} [audioFilename]
+ * @property {string} [audioFreq]
+ * @property {string} [imageCaption]
+ * @property {string} [imageBase64]
+ * @property {string} [geoCoords]
+ * @property {string} [txHash]
+ * @property {string} [createdTimestamp]
+ * @property {string} [beekeeperName]
+ * @property {string} [qrCodeDataUrl]
+ * @property {LabTestResults|null} [labTestResults]
+ * @property {RetailerLog[]} [retailerLogs]
+ */
+
 const INITIAL_BATCHES = [
   {
     batchId: 'BATCH-2026-HIM-101',

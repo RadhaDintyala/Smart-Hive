@@ -19,6 +19,56 @@ const fabricRouter = require('./blockchain/fabricRouter');
 app.use('/api/blockchain', fabricRouter);
 
 // ==========================================
+// 0. EDGE AI ANALYTICS PROXY -> Modeling/inference_service.py
+// ==========================================
+// The trained TensorFlow Lite model in ./Modeling is Python-only, so the
+// browser cannot load it directly. The inference sidecar runs on its own port
+// and is proxied here, which keeps the frontend on a single origin (and keeps
+// the existing Vite `/api` -> :3000 proxy working unchanged).
+//
+// When the sidecar is not running the proxy answers 503, and
+// `src/services/fleetAnalytics.js` transparently falls back to its on-device
+// VOC + acoustic heuristic. The dashboard degrades, it does not break.
+const ANALYTICS_SIDECAR = process.env.ANALYTICS_SIDECAR_URL || 'http://127.0.0.1:5000';
+const ANALYTICS_TIMEOUT_MS = 5000;
+
+app.use('/api/analytics', async (req, res) => {
+    const targetPath = req.originalUrl.replace(/^\/api\/analytics/, '') || '/';
+    const target = `${ANALYTICS_SIDECAR}${targetPath}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ANALYTICS_TIMEOUT_MS);
+
+    try {
+        const body = req.method === 'GET' || req.method === 'HEAD'
+            ? undefined
+            : JSON.stringify(req.body || {});
+
+        const upstream = await fetch(target, {
+            method: req.method,
+            headers: { 'Content-Type': 'application/json' },
+            body,
+            signal: controller.signal
+        });
+
+        const text = await upstream.text();
+        res.status(upstream.status);
+        res.set('Content-Type', upstream.headers.get('content-type') || 'application/json');
+        res.send(text);
+    } catch (err) {
+        res.status(503).json({
+            error: 'analytics sidecar unavailable',
+            detail: err && err.name === 'AbortError'
+                ? `No response from ${ANALYTICS_SIDECAR} within ${ANALYTICS_TIMEOUT_MS}ms`
+                : (err && err.message) || 'unknown proxy failure',
+            hint: 'Start it with: python Modeling/inference_service.py'
+        });
+    } finally {
+        clearTimeout(timer);
+    }
+});
+
+// ==========================================
 // 1. MONGODB DATABASE CONFIGURATION & SCHEMAS
 // ==========================================
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://dintyalaradhakalyani_db_user:gTUxabp0vouzy9yR@cluster0.9mt7rht.mongodb.net/smarthive?retryWrites=true&w=majority";

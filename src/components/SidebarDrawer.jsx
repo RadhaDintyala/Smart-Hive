@@ -1,5 +1,17 @@
 import React from 'react';
 
+/**
+ * Sidebar navigation.
+ *
+ * `isDocked` attaches the layout permanently to the root public landing view
+ * instead of presenting it as a dismissible overlay. The nav contents are
+ * identical in both modes - only the presentation differs, so there is a
+ * single source of truth for the role/task map.
+ *
+ * @param {object} props
+ * @param {boolean} props.isOpen
+ * @param {boolean} [props.isDocked]
+ */
 export default function SidebarDrawer({ isOpen, onClose, currentView, setCurrentView, currentUser, onSelectRole }) {
   const role = currentUser?.role || null;
 
@@ -24,6 +36,13 @@ export default function SidebarDrawer({ isOpen, onClose, currentView, setCurrent
     if (onSelectRole) onSelectRole(roleId);
     setCurrentView('login');
     window.history.pushState({}, '', '/login');
+  };
+
+  /** Navigate home */
+  const goHome = () => {
+    onClose();
+    setCurrentView('home');
+    window.history.pushState({}, '', '/');
   };
 
   return (
@@ -91,7 +110,7 @@ export default function SidebarDrawer({ isOpen, onClose, currentView, setCurrent
               </div>
 
               <hr className="sidebar-divider" />
-              <button className="btn-white" style={{ width: '100%' }} onClick={() => { onClose(); setCurrentView('home'); }}>
+              <button className="btn-white" style={{ width: '100%' }} onClick={goHome}>
                 🏠 Home Landing
               </button>
             </>
@@ -107,7 +126,7 @@ export default function SidebarDrawer({ isOpen, onClose, currentView, setCurrent
                 <li onClick={() => navigateToAndScroll('beekeeper', 'bk-batches-list')}>📱 View Registered Batches & QR</li>
               </ul>
               <hr className="sidebar-divider" />
-              <button className="btn-white" style={{ width: '100%', marginBottom: '8px' }} onClick={() => { onClose(); setCurrentView('home'); }}>
+              <button className="btn-white" style={{ width: '100%', marginBottom: '8px' }} onClick={goHome}>
                 🏠 Home Landing
               </button>
               <button className="btn-yellow" style={{ width: '100%' }} onClick={() => { onClose(); setCurrentView('login'); }}>
@@ -123,7 +142,7 @@ export default function SidebarDrawer({ isOpen, onClose, currentView, setCurrent
                 <li onClick={() => navigateToAndScroll('tester', 'lab-records-list')}>📜 View Test Records</li>
               </ul>
               <hr className="sidebar-divider" />
-              <button className="btn-white" style={{ width: '100%', marginBottom: '8px' }} onClick={() => { onClose(); setCurrentView('home'); }}>
+              <button className="btn-white" style={{ width: '100%', marginBottom: '8px' }} onClick={goHome}>
                 🏠 Home Landing
               </button>
               <button className="btn-yellow" style={{ width: '100%' }} onClick={() => { onClose(); setCurrentView('login'); }}>
@@ -138,7 +157,7 @@ export default function SidebarDrawer({ isOpen, onClose, currentView, setCurrent
                 <li onClick={() => navigateToAndScroll('retailer', 'retailer-logs-list')}>📋 Store Inventory Audit Logs</li>
               </ul>
               <hr className="sidebar-divider" />
-              <button className="btn-white" style={{ width: '100%', marginBottom: '8px' }} onClick={() => { onClose(); setCurrentView('home'); }}>
+              <button className="btn-white" style={{ width: '100%', marginBottom: '8px' }} onClick={goHome}>
                 🏠 Home Landing
               </button>
               <button className="btn-yellow" style={{ width: '100%' }} onClick={() => { onClose(); setCurrentView('login'); }}>
@@ -155,7 +174,7 @@ export default function SidebarDrawer({ isOpen, onClose, currentView, setCurrent
                 <li onClick={() => navigateToAndScroll('consumer', 'btn-goto-contact')}>⚠️ Report Quality Concern</li>
               </ul>
               <hr className="sidebar-divider" />
-              <button className="btn-white" style={{ width: '100%', marginBottom: '8px' }} onClick={() => { onClose(); setCurrentView('home'); }}>
+              <button className="btn-white" style={{ width: '100%', marginBottom: '8px' }} onClick={goHome}>
                 🏠 Home Landing
               </button>
               <button className="btn-yellow" style={{ width: '100%' }} onClick={() => { onClose(); setCurrentView('login'); }}>

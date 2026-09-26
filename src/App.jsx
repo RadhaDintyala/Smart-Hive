@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Header from './components/Header.jsx';
 import Footer from './components/Footer.jsx';
 import SidebarDrawer from './components/SidebarDrawer.jsx';
@@ -11,6 +11,10 @@ import RetailerView from './views/RetailerView.jsx';
 import ConsumerView from './views/ConsumerView.jsx';
 import FeedbackView from './views/FeedbackView.jsx';
 import ContactView from './views/ContactView.jsx';
+
+// Global historic scan log. Kept out of the main bundle and only fetched when
+// the consumer actually opens the "Explore Previous Scans" tab.
+const PreviousScansPanel = lazy(() => import('./components/PreviousScansPanel.jsx'));
 
 export default function App() {
   const [currentView, setCurrentView] = useState('home');
@@ -91,7 +95,7 @@ export default function App() {
         />
       )}
 
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, marginLeft: 0 }}>
         {currentView === 'home' && (
           <HomeView 
             setCurrentView={setCurrentView} 
@@ -111,10 +115,21 @@ export default function App() {
           <RetailerView authToken={authToken} />
         )}
         {currentView === 'consumer' && (
-          <ConsumerView 
-            selectedBatchId={selectedBatchId} 
-            setCurrentView={setCurrentView} 
-          />
+          <Suspense fallback={null}>
+            <ConsumerView 
+              selectedBatchId={selectedBatchId} 
+              setCurrentView={setCurrentView} 
+              renderPreviousScans={() => (
+                <Suspense fallback={<div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Loading scan history...</div>}>
+                  <PreviousScansPanel onSelectBatch={(id) => {
+                    setSelectedBatchId(id);
+                    setCurrentView('consumer');
+                    window.history.pushState({}, '', `/consumer?batchId=${encodeURIComponent(id)}`);
+                  }} />
+                </Suspense>
+              )}
+            />
+          </Suspense>
         )}
         {currentView === 'feedback' && <FeedbackView />}
         {currentView === 'contact' && <ContactView />}

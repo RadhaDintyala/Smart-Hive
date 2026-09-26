@@ -144,15 +144,15 @@ export default function PDFReportView({ batchId: propBatchId, setCurrentView }) 
         </div>
 
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button 
+          <button
             onClick={handlePrint}
-            className="btn-yellow" 
+            className="btn-yellow"
             style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 800 }}
           >
             🖨️ Print / Download PDF
           </button>
 
-          <button 
+          <button
             onClick={handleCopyLink}
             className="btn-white"
             style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 700 }}
@@ -160,7 +160,7 @@ export default function PDFReportView({ batchId: propBatchId, setCurrentView }) 
             {copied ? '✓ Link Copied!' : '🔗 Share PDF Link'}
           </button>
 
-          <button 
+          <button
             onClick={handleGoToConsumer}
             className="btn-white"
             style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 700 }}
@@ -289,7 +289,7 @@ export default function PDFReportView({ batchId: propBatchId, setCurrentView }) 
           <div><strong>SHA-256 Payload Hash:</strong> <code style={{ color: '#38bdf8', wordBreak: 'break-all' }}>{b.sha256Hash || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}</code></div>
           <div><strong>Hyperledger Fabric Tx:</strong> <code style={{ color: '#4ade80', wordBreak: 'break-all' }}>{b.txHash || '0x7f8a91b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0'}</code></div>
           <div style={{ color: '#94a3b8', marginTop: '10px', fontSize: '0.75rem', textAlign: 'center', borderTop: '1px solid #334155', paddingTop: '10px' }}>
-            Official Smart Hive Public Audit Certificate • Generated on {new Date().toLocaleString()}<br/>
+            Official Smart Hive Public Audit Certificate • Generated on {new Date().toLocaleString()}<br />
             Smart Hive AI-IoT Platform • Cryptographically Sealed Immutable Ledger
           </div>
         </div>

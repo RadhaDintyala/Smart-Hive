@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const path = require('path');
 const QRCode = require('qrcode');
 const fs = require('fs');
+const mongoose = require('mongoose');
 
 const app = express();
 const server = http.createServer(app);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getStoredBatches, updateLabResults } from '../services/batchStore';
+import { getStoredBatches, updateLabResults, LedgerConflictError } from '../services/batchStore';
 import { formatMeasure } from '../services/units';
 
 /**
@@ -95,15 +95,31 @@ export default function LabView({ authToken }) {
     setMsg('');
 
     setTimeout(() => {
-      const updatedList = updateLabResults(selectedBatch.batchId, formData);
-      setBatches(updatedList);
-      const updatedBatch = updatedList.find(b => b.batchId === selectedBatch.batchId);
-      if (updatedBatch) setSelectedBatch(updatedBatch);
+      try {
+        const updatedList = updateLabResults(selectedBatch.batchId, formData);
+        setBatches(updatedList);
+        const updatedBatch = updatedList.find(b => b.batchId === selectedBatch.batchId);
+        if (updatedBatch) setSelectedBatch(updatedBatch);
 
-      setLoading(false);
-      // Seal the form: no further edits can override the ledger record.
-      setIsSubmitted(true);
-      setMsg('✓ NABL Laboratory Certificate & Feedback Issued & Sealed to Ledger Successfully!');
+        // Seal the form: no further edits can override the ledger record.
+        setIsSubmitted(true);
+        setMsg('✓ NABL Laboratory Certificate & Feedback Issued & Sealed to Ledger Successfully!');
+      } catch (err) {
+        // The ledger refused to re-certify an already certified batch.
+        if (err instanceof LedgerConflictError) {
+          const fresh = getStoredBatches().find(b => b.batchId === selectedBatch.batchId);
+          if (fresh) {
+            setBatches(getStoredBatches());
+            setSelectedBatch(fresh);
+          }
+          setIsSubmitted(true);
+          setMsg(`🔒 ${err.message}`);
+        } else {
+          setMsg('Could not seal the certificate. Please retry.');
+        }
+      } finally {
+        setLoading(false);
+      }
     }, 600);
   };
 

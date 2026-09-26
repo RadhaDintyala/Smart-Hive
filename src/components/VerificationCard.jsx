@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import jsQR from 'jsqr';
 import QrScanner from './QrScanner';
 
 /**
  * Unified verification box.
  *
- * Groups the three consumer entry points - Honey Verification, Batch ID Input
- * and the QR Scanner - inside a single bordered card so the landing page and
- * the post-scan viewport present one consistent surface. Previously these three
- * controls were separate bordered blocks at different visual weights.
+ * Groups the three consumer entry points - Honey Verification, Batch ID Input,
+ * live Camera QR Scanner, and Upload QR Image Scanner - inside a single bordered card.
  *
  * Styling intentionally reuses the locked theme tokens (the `#f5b814` accent,
  * `neo-input`, `btn-yellow`, `btn-white`) rather than introducing new CSS.
@@ -37,10 +36,9 @@ export default function VerificationCard({
 }) {
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef(null);
 
-  // The camera button now genuinely opens the scanner. It must NOT resolve the
-  // current input value: that is what made the button appear to "reopen the
-  // previous report" instead of scanning.
   const triggerScan = () => {
     setShowScanner(true);
     setScanning(true);
@@ -54,8 +52,55 @@ export default function VerificationCard({
   /** A decoded QR payload is the source of truth - ignore whatever was typed. */
   const handleDecoded = (payload) => {
     closeScanner();
+    setUploadError('');
     onChange(payload);
     onSubmit(payload);
+  };
+
+  const triggerFileUpload = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    setUploadError('');
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          setUploadError('Failed to process image in canvas context.');
+          return;
+        }
+        ctx.drawImage(img, 0, 0, img.width, img.height);
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+
+        let code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'attemptBoth',
+        });
+
+        if (code && code.data && code.data.trim()) {
+          handleDecoded(code.data.trim());
+        } else {
+          setUploadError('No QR code detected in the uploaded image. Please ensure the QR code is clear, or type the Batch ID manually above.');
+        }
+      };
+      img.onerror = () => {
+        setUploadError('Could not load the selected image file. Please try a valid image format.');
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -112,7 +157,16 @@ export default function VerificationCard({
         </button>
       </form>
 
-      {/* QR Scanner */}
+      {/* Hidden File Input for Image QR Scanner */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/*"
+        onChange={handleFileUpload}
+        style={{ display: 'none' }}
+      />
+
+      {/* QR Scanner Options */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
         <button
           type="button"
@@ -125,10 +179,10 @@ export default function VerificationCard({
         <button
           type="button"
           className="btn-white"
-          onClick={closeScanner}
+          onClick={triggerFileUpload}
           style={{ padding: '14px', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
         >
-          <span>{showScanner ? '✕ Close Scanner' : '⌨ Type Batch ID Above'}</span>
+          <span>📁 Upload QR Scanner</span>
         </button>
       </div>
 
@@ -154,7 +208,7 @@ export default function VerificationCard({
         </div>
       )}
 
-      {error && (
+      {(error || uploadError) && (
         <div
           style={{
             padding: '10px 14px',
@@ -166,7 +220,7 @@ export default function VerificationCard({
             fontWeight: 700,
           }}
         >
-          {error}
+          {error || uploadError}
         </div>
       )}
 
@@ -174,3 +228,4 @@ export default function VerificationCard({
     </section>
   );
 }
+

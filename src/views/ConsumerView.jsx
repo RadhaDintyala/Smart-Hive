@@ -6,37 +6,8 @@ import { findBatchById, fetchBatchRemote } from '../services/batchStore';
 import { recordScan } from '../services/scanHistory';
 import { buildProvenanceTimeline, summariseBatch } from '../services/provenance';
 import { formatMeasure } from '../services/units';
+import { extractBatchId } from '../services/qrDecoder';
 
-/**
- * Pull a Batch ID out of anything the platform can print or encode into a QR.
- *
- * Handles every payload shape in circulation:
- *   - bare id:            BATCH-2026-HIM-101
- *   - verify URL:         http://host/consumer?batchId=BATCH-...
- *   - PDF deep link:      http://host/pdf/BATCH-...
- *   - query string only:  ?batchId=BATCH-...
- *
- * @param {string} raw
- * @returns {string} the batch id, upper-cased, or '' when unparseable
- */
-function extractBatchId(raw) {
-  const text = (raw || '').trim();
-  if (!text) return '';
-
-  if (text.includes('batchId=')) {
-    const query = text.slice(text.indexOf('batchId=') + 'batchId='.length);
-    const value = query.split('&')[0].split('#')[0];
-    return decodeURIComponent(value).trim().toUpperCase();
-  }
-
-  if (text.includes('/pdf/')) {
-    return text.split('/pdf/').pop().split(/[/?#]/)[0].trim().toUpperCase();
-  }
-
-  // A bare id. Reject anything URL-shaped we failed to parse above.
-  if (/^https?:\/\//i.test(text)) return '';
-  return text.toUpperCase();
-}
 
 /**
  * Public consumer verification viewport.

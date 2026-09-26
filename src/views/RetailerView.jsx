@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getStoredBatches, addRetailerLog, findBatchById, getStoreIdentity, LedgerConflictError } from '../services/batchStore';
+import { getStoredBatches, addRetailerLog, findBatchById, fetchBatchRemote, getStoreIdentity, LedgerConflictError } from '../services/batchStore';
 import TransitPipeline from '../components/TransitPipeline';
 import BatchDetailsModal from '../components/BatchDetailsModal';
+import VerificationCard from '../components/VerificationCard';
 import { formatMeasure, jarsToVolume, formatMeasureOrFallback } from '../services/units';
+import { extractBatchId } from '../services/qrDecoder';
 
 export default function RetailerView({ authToken }) {
   const [batches, setBatches] = useState([]);
@@ -24,16 +26,23 @@ export default function RetailerView({ authToken }) {
     return () => window.removeEventListener('sh_batches_updated', handleUpdate);
   }, []);
 
-  const handleVerifyQrInput = (e) => {
-    e.preventDefault();
-    const target = (scanInput || '').trim();
+  const handleVerifyQrInput = async (payload) => {
+    const raw = typeof payload === 'string' ? payload : scanInput;
+    const target = (raw || '').trim();
     if (!target) return;
-    const found = batches.find(b => b.batchId === target || b.batchIdCustom === target);
+
+    const targetId = extractBatchId(target) || target.toUpperCase();
+    let found = await fetchBatchRemote(targetId);
+    if (!found) found = findBatchById(targetId);
+
     if (found) {
       setSelectedBatch(found);
       setScanResult({ success: true, batch: found });
     } else {
-      setScanResult({ success: false, error: `Batch "${target}" NOT found on Blockchain Ledger. Fake or untrusted QR code!` });
+      setScanResult({
+        success: false,
+        error: `Batch "${targetId}" NOT found on Blockchain Ledger. Fake or untrusted QR code!`,
+      });
     }
   };
 
@@ -242,26 +251,15 @@ export default function RetailerView({ authToken }) {
       {activeTab === 'inventory' && (
         <div>
           {/* RETAILER QR VERIFICATION SEARCH BAR */}
-          <div className="glass-card" style={{ padding: '20px 24px', borderRadius: '20px', marginBottom: '24px', background: 'rgba(255, 255, 255, 0.9)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-              <span style={{ fontSize: '1.4rem' }}>📱</span>
-              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#0f172a' }}>
-                Retailer QR Code & Inventory Verification Scanner
-              </h3>
-            </div>
-            <form onSubmit={handleVerifyQrInput} style={{ display: 'flex', gap: '10px', maxWidth: '600px' }}>
-              <input
-                type="text"
-                className="neo-input"
-                placeholder="Scan or enter delivery Batch ID (e.g. BATCH-2026-HIM-101)..."
-                value={scanInput}
-                onChange={(e) => setScanInput(e.target.value)}
-                style={{ flex: 1, padding: '12px 16px', fontSize: '0.9rem' }}
-              />
-              <button type="submit" className="btn-yellow" style={{ padding: '12px 20px', fontSize: '0.9rem', fontWeight: 800 }}>
-                Verify Batch ➔
-              </button>
-            </form>
+          <div style={{ marginBottom: '24px' }}>
+            <VerificationCard
+              title="Retailer QR Code & Inventory Verification Scanner"
+              subtitle="Scan jar label QR code, upload photo/screenshot, or enter Batch ID to verify against the Blockchain"
+              value={scanInput}
+              onChange={setScanInput}
+              onSubmit={handleVerifyQrInput}
+              placeholder="Scan or enter delivery Batch ID (e.g. BATCH-2026-HIM-101)..."
+            />
 
             {scanResult && (
               <div style={{ marginTop: '14px' }}>

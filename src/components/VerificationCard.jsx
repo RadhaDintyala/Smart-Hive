@@ -1,27 +1,12 @@
 import React, { useState, useRef } from 'react';
-import jsQR from 'jsqr';
 import QrScanner from './QrScanner';
+import { decodeQrFromImage, extractBatchId } from '../services/qrDecoder';
 
 /**
  * Unified verification box.
  *
  * Groups the three consumer entry points - Honey Verification, Batch ID Input,
  * live Camera QR Scanner, and Upload QR Image Scanner - inside a single bordered card.
- *
- * Styling intentionally reuses the locked theme tokens (the `#f5b814` accent,
- * `neo-input`, `btn-yellow`, `btn-white`) rather than introducing new CSS.
- *
- * @param {object} props
- * @param {string} props.title
- * @param {string} [props.subtitle]
- * @param {string} props.value             Current Batch ID input.
- * @param {(v: string) => void} props.onChange
- * @param {() => void} props.onSubmit      Invoked with the trimmed value or a
- *                                          decoded QR payload.
- * @param {string} [props.placeholder]
- * @param {string} [props.error]           Inline validation / lookup error.
- * @param {boolean} [props.compact]        Tightens padding for the result viewport.
- * @param {React.ReactNode} [props.footer] Extra actions (e.g. report controls).
  */
 export default function VerificationCard({
   title,
@@ -36,6 +21,7 @@ export default function VerificationCard({
 }) {
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef(null);
 
@@ -49,12 +35,14 @@ export default function VerificationCard({
     setScanning(false);
   };
 
-  /** A decoded QR payload is the source of truth - ignore whatever was typed. */
+  /** A decoded QR payload is parsed to extract the Batch ID then submitted. */
   const handleDecoded = (payload) => {
     closeScanner();
+    setIsAnalyzing(false);
     setUploadError('');
-    onChange(payload);
-    onSubmit(payload);
+    const extracted = extractBatchId(payload) || payload;
+    onChange(extracted);
+    onSubmit(extracted);
   };
 
   const triggerFileUpload = () => {
@@ -69,36 +57,34 @@ export default function VerificationCard({
     if (!file) return;
 
     setUploadError('');
+    setIsAnalyzing(true);
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          setUploadError('Failed to process image in canvas context.');
-          return;
-        }
-        ctx.drawImage(img, 0, 0, img.width, img.height);
-        const imageData = ctx.getImageData(0, 0, img.width, img.height);
-
-        let code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'attemptBoth',
-        });
-
-        if (code && code.data && code.data.trim()) {
-          handleDecoded(code.data.trim());
-        } else {
-          setUploadError('No QR code detected in the uploaded image. Please ensure the QR code is clear, or type the Batch ID manually above.');
+      img.onload = async () => {
+        try {
+          const rawCode = await decodeQrFromImage(img);
+          if (rawCode) {
+            handleDecoded(rawCode);
+          } else {
+            setIsAnalyzing(false);
+            setUploadError('No QR code detected in the uploaded image. Please ensure the QR code photo or screenshot is clear.');
+          }
+        } catch (err) {
+          setIsAnalyzing(false);
+          setUploadError(err.message || 'Could not detect QR code in the uploaded image.');
         }
       };
       img.onerror = () => {
-        setUploadError('Could not load the selected image file. Please try a valid image format.');
+        setIsAnalyzing(false);
+        setUploadError('Could not load the selected image file. Please try a valid image file.');
       };
       img.src = event.target.result;
+    };
+    reader.onerror = () => {
+      setIsAnalyzing(false);
+      setUploadError('Failed to read the file.');
     };
     reader.readAsDataURL(file);
   };
@@ -136,7 +122,10 @@ export default function VerificationCard({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (value && value.trim()) onSubmit(value.trim());
+          if (value && value.trim()) {
+            const extracted = extractBatchId(value.trim()) || value.trim();
+            onSubmit(extracted);
+          }
         }}
         style={{ display: 'flex', gap: '8px' }}
       >
@@ -172,6 +161,7 @@ export default function VerificationCard({
           type="button"
           className="btn-yellow"
           onClick={triggerScan}
+          disabled={isAnalyzing}
           style={{ padding: '14px', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
         >
           <span>📷 Camera QR Scanner</span>
@@ -180,11 +170,31 @@ export default function VerificationCard({
           type="button"
           className="btn-white"
           onClick={triggerFileUpload}
+          disabled={isAnalyzing}
           style={{ padding: '14px', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
         >
-          <span>📁 Upload QR Scanner</span>
+          <span>{isAnalyzing ? '⏳ Analyzing Photo…' : '📁 Upload QR Scanner'}</span>
         </button>
       </div>
+
+      {isAnalyzing && (
+        <div
+          style={{
+            padding: '12px',
+            borderRadius: '12px',
+            background: '#fefce8',
+            border: '1px solid #fef08a',
+            color: '#854d0e',
+            fontSize: '0.88rem',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span>🔎</span> Scanning photo/screenshot for embedded QR code & verifying on blockchain ledger…
+        </div>
+      )}
 
       {showScanner && (
         <QrScanner onScan={handleDecoded} onClose={closeScanner} />
@@ -220,7 +230,7 @@ export default function VerificationCard({
             fontWeight: 700,
           }}
         >
-          {error || uploadError}
+          🚨 {error || uploadError}
         </div>
       )}
 
@@ -228,4 +238,5 @@ export default function VerificationCard({
     </section>
   );
 }
+
 

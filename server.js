@@ -163,6 +163,17 @@ async function seedMongoDatabase() {
     }
 }
 
+function getPublicPdfUrl(req, batchId) {
+    if (process.env.PUBLIC_URL) return `${process.env.PUBLIC_URL.replace(/\/$/, '')}/pdf/${batchId}`;
+    if (process.env.HOST_URL) return `${process.env.HOST_URL.replace(/\/$/, '')}/pdf/${batchId}`;
+    if (req) {
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+        const host = req.headers['x-forwarded-host'] || req.get('host') || 'localhost:3000';
+        return `${protocol}://${host}/pdf/${batchId}`;
+    }
+    return `http://localhost:3000/pdf/${batchId}`;
+}
+
 async function initSeedBatch() {
     const batchId = "BATCH-2026-HIM-101";
     const beekeeper = memoryUsers["beekeeper1"];
@@ -195,7 +206,7 @@ async function initSeedBatch() {
     const rawPayload = JSON.stringify({ batchId, beekeeper: beekeeper.name, iotData, harvestLogs });
     const sha256Hash = crypto.createHash('sha256').update(rawPayload).digest('hex');
 
-    const verifyUrl = `http://localhost:3000/consumer?batchId=${batchId}`;
+    const verifyUrl = getPublicPdfUrl(null, batchId);
     const qrCodeDataUrl = await QRCode.toDataURL(verifyUrl, { margin: 2, color: { dark: '#0a0a0a', light: '#ffffff' } });
 
     const batch = {
@@ -259,13 +270,17 @@ mongoose.connect(MONGODB_URI, {
 
 // React SPA Client Routes
 const serveReactApp = (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html'));
+app.get('/explore', serveReactApp);
 app.get('/login', serveReactApp);
 app.get('/beekeeper', serveReactApp);
 app.get('/tester', serveReactApp);
 app.get('/retailer', serveReactApp);
 app.get('/consumer', serveReactApp);
+app.get('/pdf', serveReactApp);
+app.get('/pdf/:batchId', serveReactApp);
 app.get('/feedback', serveReactApp);
 app.get('/contact', serveReactApp);
+
 
 // Middleware for Session Check
 function authenticateSession(req, res, next) {

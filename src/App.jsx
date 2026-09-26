@@ -4,6 +4,7 @@ import Footer from './components/Footer.jsx';
 import SidebarDrawer from './components/SidebarDrawer.jsx';
 
 import HomeView from './views/HomeView.jsx';
+import ExploreView from './views/ExploreView.jsx';
 import LoginView from './views/LoginView.jsx';
 import BeekeeperView from './views/BeekeeperView.jsx';
 import LabView from './views/LabView.jsx';
@@ -11,6 +12,8 @@ import RetailerView from './views/RetailerView.jsx';
 import ConsumerView from './views/ConsumerView.jsx';
 import FeedbackView from './views/FeedbackView.jsx';
 import ContactView from './views/ContactView.jsx';
+
+import PDFReportView from './views/PDFReportView.jsx';
 
 // Global historic scan log. Kept out of the main bundle and only fetched when
 // the consumer actually opens the "Explore Previous Scans" tab.
@@ -31,18 +34,28 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const bId = params.get('batchId');
 
+    if (path.startsWith('/pdf/')) {
+      const pdfBatchId = path.split('/pdf/')[1];
+      if (pdfBatchId) setSelectedBatchId(pdfBatchId.toUpperCase());
+      setCurrentView('pdf');
+      return;
+    }
+
     if (bId) {
       setSelectedBatchId(bId);
     }
 
     if (path === '/login') setCurrentView('login');
+    else if (path === '/explore') setCurrentView('explore');
     else if (path === '/beekeeper') setCurrentView('beekeeper');
     else if (path === '/tester') setCurrentView('tester');
     else if (path === '/retailer') setCurrentView('retailer');
     else if (path === '/consumer') setCurrentView('consumer');
+    else if (path === '/pdf') setCurrentView('pdf');
     else if (path === '/feedback') setCurrentView('feedback');
     else if (path === '/contact') setCurrentView('contact');
     else if (bId) setCurrentView('consumer');
+    else setCurrentView('home');
   }, []);
 
   const handleLoginSuccess = (token, profile, redirectRoute) => {
@@ -62,7 +75,8 @@ export default function App() {
     localStorage.removeItem('sh_user');
     setAuthToken(null);
     setCurrentUser(null);
-    setCurrentView('login');
+    window.history.pushState({}, '', '/');
+    setCurrentView('home');
   };
 
   const handleSelectRoleFromDrawer = (username) => {
@@ -102,6 +116,12 @@ export default function App() {
             setSelectedBatchId={setSelectedBatchId} 
           />
         )}
+        {currentView === 'explore' && (
+          <ExploreView 
+            setCurrentView={setCurrentView} 
+            setSelectedBatchId={setSelectedBatchId} 
+          />
+        )}
         {currentView === 'login' && (
           <LoginView onLoginSuccess={handleLoginSuccess} />
         )}
@@ -131,11 +151,18 @@ export default function App() {
             />
           </Suspense>
         )}
+        {currentView === 'pdf' && (
+          <PDFReportView 
+            batchId={selectedBatchId} 
+            setCurrentView={setCurrentView} 
+          />
+        )}
         {currentView === 'feedback' && <FeedbackView />}
         {currentView === 'contact' && <ContactView />}
       </div>
 
-      {!isConsumerView && <Footer setCurrentView={setCurrentView} />}
+      {!isConsumerView && currentView !== 'pdf' && <Footer setCurrentView={setCurrentView} />}
     </div>
   );
 }
+

@@ -281,6 +281,23 @@ export default function BatchDetailsModal({ batch, onClose, onAction, actionLabe
           <button
             type="button"
             className="btn-white"
+            onClick={() => window.open(`/pdf/${encodeURIComponent(batch.batchId)}`, '_blank')}
+            style={{
+              padding: '10px 18px',
+              fontSize: '0.88rem',
+              fontWeight: 800,
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            📄 View PDF Report
+          </button>
+
+          <button
+            type="button"
+            className="btn-white"
             onClick={onClose}
             style={{
               padding: '10px 22px',

@@ -6,6 +6,14 @@ export default function Header({ currentView, setCurrentView, currentUser, onLog
     setCurrentView('home');
   };
 
+  const getRoleDashboardRoute = (role) => {
+    if (role === 'Beekeeper') return 'beekeeper';
+    if (role === 'Laboratory') return 'tester';
+    if (role === 'Retailer') return 'retailer';
+    if (role === 'End Consumer') return 'consumer';
+    return 'login';
+  };
+
   return (
     <header className="app-header">
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -19,18 +27,43 @@ export default function Header({ currentView, setCurrentView, currentUser, onLog
         </div>
       </div>
 
-      {/* Right side Auth & Logout buttons */}
-      <div className="header-right-btns">
+      {/* Right side Action & Auth buttons */}
+      <div className="header-right-btns" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <button 
+          className="btn-white" 
+          onClick={() => { window.history.pushState({}, '', '/explore'); setCurrentView('explore'); }}
+          style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 700, margin: 0 }}
+        >
+          📖 Explore Platform
+        </button>
+
         {currentUser ? (
-          <button className="btn-logout-react" onClick={onLogout}>
-            <span>➔ Log Out</span>
-          </button>
+          <>
+            <button 
+              className="btn-yellow"
+              onClick={() => {
+                const route = getRoleDashboardRoute(currentUser.role);
+                window.history.pushState({}, '', `/${route}`);
+                setCurrentView(route);
+              }}
+              style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 800, margin: 0 }}
+            >
+              📊 {currentUser.name ? currentUser.name.split(' ')[0] : currentUser.role} Dashboard
+            </button>
+            <button className="btn-logout-react" onClick={onLogout}>
+              <span>➔ Log Out</span>
+            </button>
+          </>
         ) : (
-          <button className="btn-logout-react" onClick={() => { window.history.pushState({}, '', '/login'); setCurrentView('login'); }}>
-            <span>🔑 Login</span>
+          <button 
+            className="btn-logout-react" 
+            onClick={() => { window.history.pushState({}, '', '/login'); setCurrentView('login'); }}
+          >
+            <span>🔑 Sign In</span>
           </button>
         )}
       </div>
     </header>
   );
 }
+

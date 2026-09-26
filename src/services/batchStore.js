@@ -58,6 +58,18 @@ const STORAGE_KEY = 'sh_batches_v2';
  * @property {RetailerLog[]} [retailerLogs]
  */
 
+export const getBatchPdfUrl = (batchId) => {
+  const origin = typeof window !== 'undefined' && window.location && window.location.origin
+    ? window.location.origin
+    : 'http://localhost:3000';
+  return `${origin}/pdf/${batchId}`;
+};
+
+export const getBatchQrCodeUrl = (batchId) => {
+  const pdfUrl = getBatchPdfUrl(batchId);
+  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pdfUrl)}`;
+};
+
 const INITIAL_BATCHES = [
   {
     batchId: 'BATCH-2026-HIM-101',
@@ -78,7 +90,7 @@ const INITIAL_BATCHES = [
     txHash: '0x7f8a91b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0',
     createdTimestamp: '2026-04-12T08:30:00Z',
     beekeeperName: 'Farmer Rajendra Singh (Master Beekeeper)',
-    qrCodeDataUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=BATCH-2026-HIM-101',
+    qrCodeDataUrl: getBatchQrCodeUrl('BATCH-2026-HIM-101'),
     labTestResults: {
       purityPercentage: '99.8',
       moisturePercentage: '17.1',
@@ -120,7 +132,7 @@ const INITIAL_BATCHES = [
     txHash: '0x3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4',
     createdTimestamp: '2026-04-15T09:15:00Z',
     beekeeperName: 'Suresh Kumar (Himachal Apiaries)',
-    qrCodeDataUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=BATCH-2026-HIM-102',
+    qrCodeDataUrl: getBatchQrCodeUrl('BATCH-2026-HIM-102'),
     labTestResults: {
       purityPercentage: '99.5',
       moisturePercentage: '17.8',
@@ -153,8 +165,8 @@ export const getStoredBatches = () => {
 
 export const saveBatch = (newBatch) => {
   const current = getStoredBatches();
-  if (!newBatch.qrCodeDataUrl) {
-    newBatch.qrCodeDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(newBatch.batchId)}`;
+  if (!newBatch.qrCodeDataUrl || !newBatch.qrCodeDataUrl.includes('/pdf/')) {
+    newBatch.qrCodeDataUrl = getBatchQrCodeUrl(newBatch.batchId);
   }
   const index = current.findIndex(b => b.batchId === newBatch.batchId);
   let updated;
@@ -221,3 +233,5 @@ export const findBatchById = (batchId) => {
   const current = getStoredBatches();
   return current.find(b => b.batchId === batchId || b.batchIdCustom === batchId) || null;
 };
+
+export const getBatchById = findBatchById;

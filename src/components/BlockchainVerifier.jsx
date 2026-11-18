@@ -11,7 +11,8 @@ export default function BlockchainVerifier({ batchId = "BATCH-2026-HIM-101" }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/blockchain/verify/${batchId}`);
+      const backend = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+      const res = await fetch(`${backend}/api/blockchain/verify/${batchId}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (json.success) {

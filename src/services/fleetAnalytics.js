@@ -13,10 +13,11 @@
 /** @typedef {import('./types').InfectionVerdict} InfectionVerdict */
 
 /** Endpoint exposed by `Modeling/inference_service.py` for a single hive. */
-export const INFERENCE_ENDPOINT = '/api/analytics/infect';
+const backend = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+export const INFERENCE_ENDPOINT = `${backend}/api/analytics/infect`;
 
 /** Batched endpoint - one round trip for the whole fleet. */
-export const FLEET_ENDPOINT = '/api/analytics/fleet';
+export const FLEET_ENDPOINT = `${backend}/api/analytics/fleet`;
 
 /** Milliseconds before a sidecar call is abandoned in favour of the fallback. */
 const REQUEST_TIMEOUT_MS = 4000;

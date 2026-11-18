@@ -76,7 +76,8 @@ export default function LoginView({ onLoginSuccess }) {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const backend = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+      const res = await fetch(`${backend}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: selectedUser, password })

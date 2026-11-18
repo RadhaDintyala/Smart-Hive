@@ -17,7 +17,8 @@ export default function PDFReportView({ batchId: propBatchId, setCurrentView }) 
     setLoading(true);
 
     // Try API fetch first, fallback to local batchStore
-    fetch(`/api/consumer/verify/${encodeURIComponent(batchId)}`)
+    const backend = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+    fetch(`${backend}/api/consumer/verify/${encodeURIComponent(batchId)}`)
       .then(res => res.json())
       .then(data => {
         if (isMounted) {

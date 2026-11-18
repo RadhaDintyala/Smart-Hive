@@ -21,6 +21,18 @@ if (fs.existsSync(distPath)) {
 app.use(express.static(publicPath));
 app.use(express.json({ limit: '30mb' }));
 
+// Enable CORS for Vercel and cross-origin frontend clients
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
+
+
 // Mount Hyperledger Fabric 2.5 & IPFS Blockchain Router
 const fabricRouter = require('./blockchain/fabricRouter');
 app.use('/api/blockchain', fabricRouter);

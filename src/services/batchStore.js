@@ -91,6 +91,10 @@ export class LedgerConflictError extends Error {
  */
 
 export const getBatchPdfUrl = (batchId) => {
+  const backend = import.meta.env.VITE_API_URL;
+  if (backend) {
+    return `${backend.replace(/\/$/, '')}/pdf/${batchId}`;
+  }
   const origin = typeof window !== 'undefined' && window.location && window.location.origin
     ? window.location.origin
     : 'http://localhost:3000';
@@ -404,7 +408,9 @@ async function apiFetch(path, { method = 'GET', body, timeoutMs = 6000 } = {}) {
     const headers = { 'Content-Type': 'application/json' };
     const token = getToken();
     if (token) headers.Authorization = token;
-    const res = await fetch(path, {
+    const backend = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+    const targetUrl = path.startsWith('http') ? path : `${backend}${path}`;
+    const res = await fetch(targetUrl, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
@@ -733,8 +739,13 @@ export function connectLedgerSocket() {
 
   let url;
   try {
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    url = `${proto}//${window.location.host}`;
+    const backend = import.meta.env.VITE_API_URL;
+    if (backend) {
+      url = backend.replace(/^http/, 'ws').replace(/\/$/, '');
+    } else {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      url = `${proto}//${window.location.host}`;
+    }
   } catch {
     return () => {};
   }
